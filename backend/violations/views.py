@@ -2,6 +2,7 @@ from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from accounts.permissions import IsAdminOrStaff, IsEnforcer, IsAdminOrReadOnly
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 
@@ -16,10 +17,7 @@ from .serializers import (
 class ViolationTypeViewSet(viewsets.ModelViewSet):
     queryset           = ViolationType.objects.filter(is_active=True)
     serializer_class   = ViolationTypeSerializer
-    permission_classes = [IsAuthenticated]
-    filter_backends    = [filters.SearchFilter, DjangoFilterBackend]
-    search_fields      = ['code', 'name']
-    filterset_fields   = ['category']
+    permission_classes = [IsAdminOrReadOnly]
 
 
 class ViolationViewSet(viewsets.ModelViewSet):

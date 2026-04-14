@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from accounts.permissions import IsAdmin, IsAdminOrStaff
 from django.utils import timezone
 from django.db.models import Count, Sum, Q
 from datetime import timedelta
@@ -14,7 +15,7 @@ class DashboardStatsView(APIView):
     Main dashboard stats —
     Total violations, today, pending, approved, active enforcers
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         today = timezone.now().date()
