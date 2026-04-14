@@ -1,0 +1,8 @@
+[
+  {"model": "violations.violationtype", "pk": 1, "fields": {"code": "TRF-001", "name": "Overspeeding", "description": "Exceeding the speed limit", "category": "traffic", "penalty_amount": "500.00", "is_active": true, "created_at": "2026-01-01T00:00:00Z"}},
+  {"model": "violations.violationtype", "pk": 2, "fields": {"code": "TRF-002", "name": "Beating Red Light", "description": "Passing through a red traffic light", "category": "traffic", "penalty_amount": "1000.00", "is_active": true, "created_at": "2026-01-01T00:00:00Z"}},
+  {"model": "violations.violationtype", "pk": 3, "fields": {"code": "TRF-003", "name": "Illegal Parking", "description": "Parking in prohibited areas", "category": "traffic", "penalty_amount": "300.00", "is_active": true, "created_at": "2026-01-01T00:00:00Z"}},
+  {"model": "violations.violationtype", "pk": 4, "fields": {"code": "SAF-001", "name": "No Helmet", "description": "Motorcycle rider without helmet", "category": "safety", "penalty_amount": "500.00", "is_active": true, "created_at": "2026-01-01T00:00:00Z"}},
+  {"model": "violations.violationtype", "pk": 5, "fields": {"code": "SAF-002", "name": "No Seatbelt", "description": "Driver or passenger without seatbelt", "category": "safety", "penalty_amount": "500.00", "is_active": true, "created_at": "2026-01-01T00:00:00Z"}},
+  {"model": "violations.violationtype", "pk": 6, "fields": {"code": "SAF-003", "name": "Illegal Overloading", "description": "Exceeding passenger or cargo capacity", "category": "safety", "penalty_amount": "800.00", "is_active": true, "created_at": "2026-01-01T00:00:00Z"}}
+]
