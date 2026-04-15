@@ -285,3 +285,82 @@ class GenerateReportView(APIView):
             {'error': 'Invalid report type. Choose: daily, monthly, by_type, enforcer_activity'},
             status=400
         )
+    
+import openpyxl
+from openpyxl.utils import get_column_letter
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+from django.http import HttpResponse
+from violations.models import Violation
+
+
+class ExportViolationsPDFView(APIView):
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request):
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="violations.pdf"'
+
+        doc = SimpleDocTemplate(response, pagesize=letter)
+        styles = getSampleStyleSheet()
+        elements = []
+
+        elements.append(Paragraph("Violations Report", styles['Title']))
+
+        violations = Violation.objects.select_related('violation_type', 'enforcer').all()
+
+        data = [['ID', 'Violator', 'Violation Type', 'Status', 'Penalty', 'Date']]
+        for v in violations:
+            data.append([
+                v.violation_id,
+                v.violator_name,
+                v.violation_type.name,
+                v.status,
+                str(v.penalty_amount),
+                v.date_time.strftime('%Y-%m-%d'),
+            ])
+
+        table = Table(data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ]))
+        elements.append(table)
+        doc.build(elements)
+        return response
+
+
+class ExportViolationsExcelView(APIView):
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request):
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename="violations.xlsx"'
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Violations"
+
+        headers = ['ID', 'Violator', 'Violation Type', 'Status', 'Penalty', 'Date']
+        for col_num, header in enumerate(headers, 1):
+            ws[f'{get_column_letter(col_num)}1'] = header
+
+        violations = Violation.objects.select_related('violation_type', 'enforcer').all()
+        for row_num, v in enumerate(violations, 2):
+            ws[f'A{row_num}'] = v.violation_id
+            ws[f'B{row_num}'] = v.violator_name
+            ws[f'C{row_num}'] = v.violation_type.name
+            ws[f'D{row_num}'] = v.status
+            ws[f'E{row_num}'] = str(v.penalty_amount)
+            ws[f'F{row_num}'] = v.date_time.strftime('%Y-%m-%d')
+
+        wb.save(response)
+        return response

@@ -9,4 +9,6 @@ urlpatterns = [
     path('top-enforcers/',    views.TopEnforcersView.as_view(),     name='top_enforcers'),
     path('collection/',       views.CollectionSummaryView.as_view(), name='collection'),
     path('generate/',         views.GenerateReportView.as_view(),   name='generate_report'),
+    path('export/pdf/', views.ExportViolationsPDFView.as_view(), name='export-pdf'),
+    path('export/excel/', views.ExportViolationsExcelView.as_view(), name='export-excel'),
 ]
