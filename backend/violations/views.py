@@ -176,3 +176,31 @@ class DigitalTicketViewSet(viewsets.ReadOnlyModelViewSet):
         'violation__violator_name',
         'violation__plate_number',
     ]
+
+from rest_framework.views import APIView
+
+class OCRScanView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .ocr import extract_text_from_base64, parse_license_info
+
+        image = request.data.get('image')
+        if not image:
+            return Response(
+                {'error': 'image is required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        text_list = extract_text_from_base64(image)
+        if not text_list:
+            return Response(
+                {'error': 'No text detected. Please retake the photo.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        parsed = parse_license_info(text_list)
+        return Response({
+            'raw_text': text_list,
+            'parsed':   parsed,
+        })
