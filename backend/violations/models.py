@@ -19,6 +19,10 @@ class ViolationType(models.Model):
     class Meta:
         db_table = 'violation_types'
         ordering = ['code']
+        indexes  = [
+            models.Index(fields=['category'], name='idx_vtype_category'),
+            models.Index(fields=['is_active'], name='idx_vtype_is_active'),
+        ]
 
     def __str__(self):
         return f'{self.code} - {self.name}'
@@ -68,12 +72,21 @@ class Violation(models.Model):
     amount_paid    = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     or_number      = models.CharField(max_length=50, blank=True)
     date_paid      = models.DateField(null=True, blank=True)
+    evidence_image = models.TextField(blank=True, null=True)  # Base64 image
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'violations'
         ordering = ['-created_at']
+        indexes  = [
+            models.Index(fields=['status'],       name='idx_violation_status'),
+            models.Index(fields=['plate_number'], name='idx_violation_plate'),
+            models.Index(fields=['enforcer'],     name='idx_violation_enforcer'),
+            models.Index(fields=['date_time'],    name='idx_violation_datetime'),
+            models.Index(fields=['created_at'],   name='idx_violation_created'),
+            models.Index(fields=['violation_type'], name='idx_violation_type'),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.violation_id:
@@ -100,6 +113,9 @@ class DigitalTicket(models.Model):
 
     class Meta:
         db_table = 'digital_tickets'
+        indexes  = [
+            models.Index(fields=['ticket_number'], name='idx_ticket_number'),
+        ]
 
     def __str__(self):
         return self.ticket_number
