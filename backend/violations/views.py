@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from accounts.permissions import IsAdminOrStaff, IsEnforcer, IsAdminOrReadOnly
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
+from audit.utils import log_action
 
 from .models import Violation, ViolationType, DigitalTicket
 from .serializers import (
@@ -19,6 +20,36 @@ class ViolationTypeViewSet(viewsets.ModelViewSet):
     serializer_class   = ViolationTypeSerializer
     permission_classes = [IsAdminOrReadOnly]
 
+    def perform_create(self, serializer):
+        vtype = serializer.save()
+        log_action(
+            user        = self.request.user,
+            action      = 'CREATE',
+            module      = 'Violations',
+            description = f'Created violation type: {vtype.name} ({vtype.code})',
+            request     = self.request,
+        )
+
+    def perform_update(self, serializer):
+        vtype = serializer.save()
+        log_action(
+            user        = self.request.user,
+            action      = 'UPDATE',
+            module      = 'Violations',
+            description = f'Updated violation type: {vtype.name} ({vtype.code})',
+            request     = self.request,
+        )
+
+    def perform_destroy(self, instance):
+        log_action(
+            user        = self.request.user,
+            action      = 'DELETE',
+            module      = 'Violations',
+            description = f'Deleted violation type: {instance.name} ({instance.code})',
+            request     = self.request,
+        )
+        instance.delete()
+
 
 class ViolationViewSet(viewsets.ModelViewSet):
     queryset = Violation.objects.select_related(
@@ -32,6 +63,36 @@ class ViolationViewSet(viewsets.ModelViewSet):
     ordering_fields    = ['created_at', 'date_time', 'penalty_amount']
     ordering           = ['-created_at']
 
+    def perform_create(self, serializer):
+        violation = serializer.save()
+        log_action(
+            user        = self.request.user,
+            action      = 'CREATE',
+            module      = 'Violations',
+            description = f'Recorded violation {violation.violation_id} for {violation.violator_name} ({violation.plate_number})',
+            request     = self.request,
+        )
+
+    def perform_update(self, serializer):
+        violation = serializer.save()
+        log_action(
+            user        = self.request.user,
+            action      = 'UPDATE',
+            module      = 'Violations',
+            description = f'Updated violation {violation.violation_id} — status: {violation.status}',
+            request     = self.request,
+        )
+
+    def perform_destroy(self, instance):
+        log_action(
+            user        = self.request.user,
+            action      = 'DELETE',
+            module      = 'Violations',
+            description = f'Deleted violation {instance.violation_id} for {instance.violator_name}',
+            request     = self.request,
+        )
+        instance.delete()
+
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
         violation = self.get_object()
@@ -43,6 +104,13 @@ class ViolationViewSet(viewsets.ModelViewSet):
         violation.status      = Violation.Status.APPROVED
         violation.assessed_by = request.user
         violation.save()
+        log_action(
+            user        = request.user,
+            action      = 'UPDATE',
+            module      = 'Violations',
+            description = f'Approved violation {violation.violation_id} for {violation.violator_name}',
+            request     = request,
+        )
         return Response(ViolationSerializer(violation).data)
 
     @action(detail=True, methods=['post'])
@@ -58,6 +126,13 @@ class ViolationViewSet(viewsets.ModelViewSet):
             violation     = violation,
             ticket_number = ticket_num,
             generated_by  = request.user,
+        )
+        log_action(
+            user        = request.user,
+            action      = 'CREATE',
+            module      = 'Violations',
+            description = f'Generated ticket {ticket_num} for violation {violation.violation_id}',
+            request     = request,
         )
         return Response(
             DigitalTicketSerializer(ticket).data,
@@ -79,6 +154,13 @@ class ViolationViewSet(viewsets.ModelViewSet):
         violation.or_number   = or_number
         violation.date_paid   = timezone.now().date()
         violation.save()
+        log_action(
+            user        = request.user,
+            action      = 'UPDATE',
+            module      = 'Violations',
+            description = f'Marked violation {violation.violation_id} as PAID — OR#: {or_number}, Amount: {amount}',
+            request     = request,
+        )
         return Response(ViolationSerializer(violation).data)
 
 

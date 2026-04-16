@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils import timezone
+from audit.utils import log_action
 
 from .models import CustomUser
 from .serializers import (
@@ -61,6 +62,13 @@ class LoginView(APIView):
             user = serializer.validated_data['user']
             user.last_login = timezone.now()
             user.save(update_fields=['last_login'])
+            log_action(
+                user        = user,
+                action      = 'LOGIN',
+                module      = 'Accounts',
+                description = f'{user.email} logged in',
+                request     = request,
+            )
             return Response({
                 'message':  'Login successful.',
                 'user':     UserSerializer(user).data,
@@ -86,6 +94,13 @@ class LogoutView(APIView):
                 )
             token = RefreshToken(refresh_token)
             token.blacklist()
+            log_action(
+                user        = request.user,
+                action      = 'LOGOUT',
+                module      = 'Accounts',
+                description = f'{request.user.email} logged out',
+                request     = request,
+            )
             return Response({'message': 'Logged out successfully.'})
         except Exception:
             return Response(
@@ -108,6 +123,13 @@ class MeView(APIView):
         )
         if serializer.is_valid():
             serializer.save()
+            log_action(
+                user        = request.user,
+                action      = 'UPDATE',
+                module      = 'Accounts',
+                description = f'{request.user.email} updated their profile',
+                request     = request,
+            )
             return Response({
                 'message': 'Profile updated.',
                 'user':    UserSerializer(request.user).data,
@@ -136,6 +158,13 @@ class ChangePasswordView(APIView):
                 serializer.validated_data['new_password']
             )
             user.save()
+            log_action(
+                user        = request.user,
+                action      = 'UPDATE',
+                module      = 'Accounts',
+                description = f'{request.user.email} changed their password',
+                request     = request,
+            )
             return Response(
                 {'message': 'Password changed successfully.'}
             )
@@ -169,6 +198,13 @@ class UserListView(APIView):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
+            log_action(
+                user        = request.user,
+                action      = 'CREATE',
+                module      = 'Accounts',
+                description = f'Created new {user.role} account: {user.email}',
+                request     = request,
+            )
             return Response(
                 UserSerializer(user).data,
                 status=status.HTTP_201_CREATED
@@ -214,6 +250,13 @@ class UserDetailView(APIView):
         )
         if serializer.is_valid():
             serializer.save()
+            log_action(
+                user        = request.user,
+                action      = 'UPDATE',
+                module      = 'Accounts',
+                description = f'Updated account: {user.email}',
+                request     = request,
+            )
             return Response(UserSerializer(user).data)
         return Response(
             serializer.errors,
@@ -234,6 +277,13 @@ class UserDetailView(APIView):
             )
         user.is_active = False
         user.save(update_fields=['is_active'])
+        log_action(
+            user        = request.user,
+            action      = 'DELETE',
+            module      = 'Accounts',
+            description = f'Deactivated account: {user.email}',
+            request     = request,
+        )
         return Response(
             {'message': f'{user.full_name} has been deactivated.'}
         )

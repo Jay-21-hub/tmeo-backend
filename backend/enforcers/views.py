@@ -4,7 +4,9 @@ from rest_framework import status, permissions, serializers
 from accounts.permissions import IsAdmin, IsEnforcer
 from accounts.models import CustomUser
 from accounts.serializers import UserSerializer
+from audit.utils import log_action
 from .models import EnforcerLocation
+from .notifications import send_deployment_notification
 
 
 class EnforcerLocationSerializer(serializers.ModelSerializer):
@@ -64,3 +66,53 @@ class UpdateLocationView(APIView):
             }
         )
         return Response(EnforcerLocationSerializer(loc).data)
+
+
+class DeployEnforcerView(APIView):
+    permission_classes = [IsAdmin]
+
+    def post(self, request):
+        enforcer_id = request.data.get('enforcer_id')
+        area        = request.data.get('area')
+
+        if not enforcer_id or not area:
+            return Response(
+                {'error': 'enforcer_id and area are required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            enforcer = CustomUser.objects.get(
+                id=enforcer_id, role='enforcer', is_active=True
+            )
+        except CustomUser.DoesNotExist:
+            return Response(
+                {'error': 'Enforcer not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Send email notification
+        try:
+            send_deployment_notification(
+                enforcer    = enforcer,
+                area        = area,
+                deployed_by = request.user,
+            )
+            email_status = 'sent'
+        except Exception as e:
+            email_status = f'failed: {str(e)}'
+
+        # Log the deployment
+        log_action(
+            user        = request.user,
+            action      = 'DEPLOY',
+            module      = 'Enforcers',
+            description = f'Deployed {enforcer.full_name} to {area}',
+            request     = request,
+        )
+
+        return Response({
+            'message':      f'{enforcer.full_name} deployed to {area}.',
+            'email_status': email_status,
+            'enforcer':     UserSerializer(enforcer).data,
+        })

@@ -11,4 +11,5 @@ urlpatterns = [
     path('generate/',         views.GenerateReportView.as_view(),   name='generate_report'),
     path('export/pdf/', views.ExportViolationsPDFView.as_view(), name='export-pdf'),
     path('export/excel/', views.ExportViolationsExcelView.as_view(), name='export-excel'),
+    path('analytics/', views.AnalyticsView.as_view(), name='analytics'),
 ]

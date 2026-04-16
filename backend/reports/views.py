@@ -364,3 +364,84 @@ class ExportViolationsExcelView(APIView):
 
         wb.save(response)
         return response
+class AnalyticsView(APIView):
+    permission_classes = [IsAdminOrStaff]
+
+    def get(self, request):
+        from django.db.models import Count, Sum, Q
+        from django.db.models.functions import ExtractHour, ExtractWeekDay, TruncMonth
+        from violations.models import Violation
+        from accounts.models import CustomUser
+
+        # 1. Violations per hour of day (0-23)
+        per_hour = (
+            Violation.objects
+            .annotate(hour=ExtractHour('date_time'))
+            .values('hour')
+            .annotate(count=Count('id'))
+            .order_by('hour')
+        )
+
+        # 2. Violations per day of week (1=Sunday, 7=Saturday)
+        per_weekday = (
+            Violation.objects
+            .annotate(weekday=ExtractWeekDay('date_time'))
+            .values('weekday')
+            .annotate(count=Count('id'))
+            .order_by('weekday')
+        )
+
+        weekday_map = {
+            1: 'Sunday', 2: 'Monday', 3: 'Tuesday',
+            4: 'Wednesday', 5: 'Thursday', 6: 'Friday', 7: 'Saturday'
+        }
+
+        # 3. Most common violation type per area (location)
+        per_area = (
+            Violation.objects
+            .values('location', 'violation_type__name')
+            .annotate(count=Count('id'))
+            .order_by('location', '-count')
+        )
+
+        # 4. Collection rate
+        total      = Violation.objects.count()
+        paid_count = Violation.objects.filter(status=Violation.Status.PAID).count()
+        pending    = Violation.objects.filter(status=Violation.Status.PENDING).count()
+        collection_rate = round((paid_count / total * 100), 2) if total else 0
+
+        # 5. Enforcer performance
+        enforcer_perf = (
+            CustomUser.objects
+            .filter(role='enforcer')
+            .annotate(
+                total_violations = Count('enforcer_violations'),
+                paid_violations  = Count(
+                    'enforcer_violations',
+                    filter=Q(enforcer_violations__status=Violation.Status.PAID)
+                ),
+                total_collected  = Sum(
+                    'enforcer_violations__amount_paid',
+                    filter=Q(enforcer_violations__status=Violation.Status.PAID)
+                ),
+            )
+            .values('id', 'full_name', 'email',
+                    'total_violations', 'paid_violations', 'total_collected')
+            .order_by('-total_violations')
+        )
+
+        return Response({
+            'violations_per_hour':    list(per_hour),
+            'violations_per_weekday': [
+                {'day': weekday_map.get(x['weekday'], x['weekday']), 'count': x['count']}
+                for x in per_weekday
+            ],
+            'violations_per_area':    list(per_area),
+            'collection_rate': {
+                'total':           total,
+                'paid':            paid_count,
+                'pending':         pending,
+                'rate_percentage': collection_rate,
+            },
+            'enforcer_performance':   list(enforcer_perf),
+        })
