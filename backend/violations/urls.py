@@ -9,5 +9,13 @@ router.register('tickets', views.DigitalTicketViewSet, basename='tickets')
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('scan-license/', views.OCRScanView.as_view(), name='scan-license'),
+
+    # OCR
+    path('scan-license/', views.OCRScanView.as_view(), name='scan_license'),
+
+    # Void
+    path('records/<int:pk>/void/', views.VoidViolationView.as_view(), name='violation_void'),
+
+    # Dashboard stats
+    path('dashboard-stats/', views.ViolationDashboardStatsView.as_view(), name='violation_stats'),
 ]

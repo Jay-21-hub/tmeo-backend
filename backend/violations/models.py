@@ -60,15 +60,29 @@ class Violation(models.Model):
     status         = models.CharField(
         max_length=20, choices=Status.choices, default=Status.PENDING
     )
-    enforcer       = models.ForeignKey(
+    enforcer = models.ForeignKey(
         CustomUser, on_delete=models.SET_NULL, null=True,
         related_name='violations_issued'
     )
-    assessed_by    = models.ForeignKey(
+    # Snapshot of enforcer's role at time of recording
+    # So records remain traceable even after role changes
+    enforcer_role_snapshot = models.CharField(
+        max_length=20,
+        choices=CustomUser.Role.choices,
+        blank=True,
+        null=True,
+        editable=False,
+    )
+    assessed_by = models.ForeignKey(
         CustomUser, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='violations_assessed'
     )
-    penalty_amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+    # Immutable after creation — penalty is locked at time of recording
+    # Changing ViolationType penalty only affects NEW violations
+    penalty_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, editable=False
+    )
     amount_paid    = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     or_number      = models.CharField(max_length=50, blank=True)
     date_paid      = models.DateField(null=True, blank=True)
@@ -80,19 +94,33 @@ class Violation(models.Model):
         db_table = 'violations'
         ordering = ['-created_at']
         indexes  = [
-            models.Index(fields=['status'],       name='idx_violation_status'),
-            models.Index(fields=['plate_number'], name='idx_violation_plate'),
-            models.Index(fields=['enforcer'],     name='idx_violation_enforcer'),
-            models.Index(fields=['date_time'],    name='idx_violation_datetime'),
-            models.Index(fields=['created_at'],   name='idx_violation_created'),
+            models.Index(fields=['status'],         name='idx_violation_status'),
+            models.Index(fields=['plate_number'],   name='idx_violation_plate'),
+            models.Index(fields=['enforcer'],       name='idx_violation_enforcer'),
+            models.Index(fields=['date_time'],      name='idx_violation_datetime'),
+            models.Index(fields=['created_at'],     name='idx_violation_created'),
             models.Index(fields=['violation_type'], name='idx_violation_type'),
         ]
 
     def save(self, *args, **kwargs):
+        # Auto-generate violation ID
         if not self.violation_id:
             last    = Violation.objects.order_by('-id').first()
             next_id = (last.id + 1) if last else 1
             self.violation_id = f'VL-{next_id:06d}'
+
+        # Snapshot enforcer's role at time of first save
+        if not self.pk and self.enforcer:
+            self.enforcer_role_snapshot = self.enforcer.role
+
+        # Penalty immutability — block changes after creation
+        if self.pk:
+            original = Violation.objects.filter(pk=self.pk).values(
+                'penalty_amount'
+            ).first()
+            if original:
+                self.penalty_amount = original['penalty_amount']
+
         super().save(*args, **kwargs)
 
     def __str__(self):

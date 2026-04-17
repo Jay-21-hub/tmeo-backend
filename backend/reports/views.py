@@ -415,33 +415,17 @@ class AnalyticsView(APIView):
             CustomUser.objects
             .filter(role='enforcer')
             .annotate(
-                total_violations = Count('enforcer_violations'),
+                total_violations = Count('violations_issued'),
                 paid_violations  = Count(
-                    'enforcer_violations',
-                    filter=Q(enforcer_violations__status=Violation.Status.PAID)
+                    'violations_issued',
+                    filter=Q(violations_issued__status=Violation.Status.PAID)
                 ),
                 total_collected  = Sum(
-                    'enforcer_violations__amount_paid',
-                    filter=Q(enforcer_violations__status=Violation.Status.PAID)
+                    'violations_issued__amount_paid',
+                    filter=Q(violations_issued__status=Violation.Status.PAID)
                 ),
             )
             .values('id', 'full_name', 'email',
                     'total_violations', 'paid_violations', 'total_collected')
             .order_by('-total_violations')
         )
-
-        return Response({
-            'violations_per_hour':    list(per_hour),
-            'violations_per_weekday': [
-                {'day': weekday_map.get(x['weekday'], x['weekday']), 'count': x['count']}
-                for x in per_weekday
-            ],
-            'violations_per_area':    list(per_area),
-            'collection_rate': {
-                'total':           total,
-                'paid':            paid_count,
-                'pending':         pending,
-                'rate_percentage': collection_rate,
-            },
-            'enforcer_performance':   list(enforcer_perf),
-        })
