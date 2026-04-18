@@ -89,7 +89,6 @@ class Violation(models.Model):
     evidence_image = models.TextField(blank=True, null=True)  # Base64 image
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
-
     class Meta:
         db_table = 'violations'
         ordering = ['-created_at']
@@ -125,8 +124,6 @@ class Violation(models.Model):
 
     def __str__(self):
         return f'{self.violation_id} - {self.violator_name}'
-
-
 class DigitalTicket(models.Model):
     violation     = models.OneToOneField(
         Violation, on_delete=models.CASCADE, related_name='ticket'
@@ -138,7 +135,6 @@ class DigitalTicket(models.Model):
     generated_at  = models.DateTimeField(auto_now_add=True)
     is_printed    = models.BooleanField(default=False)
     printed_at    = models.DateTimeField(null=True, blank=True)
-
     class Meta:
         db_table = 'digital_tickets'
         indexes  = [

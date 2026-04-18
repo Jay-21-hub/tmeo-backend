@@ -207,7 +207,4 @@ class ResetPasswordSerializer(serializers.Serializer):
             })
         return attrs
 
-
-# Keep RegisterSerializer as alias for backward compat
-# but it now points to AdminCreateUserSerializer
 RegisterSerializer = AdminCreateUserSerializer

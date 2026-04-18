@@ -50,18 +50,16 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         ENFORCER = 'enforcer', 'Enforcer'
 
     # CSC-based Employment Status
-    # Basis: CSC Memorandum Circular No. 40 s. 1998 (as amended),
-    # 2025 Omnibus Rules on Appointments and Other Human Resource Actions
     class EmploymentStatus(models.TextChoices):
         ACTIVE      = 'active',      'Active'
         ON_LEAVE    = 'on_leave',    'On Leave'
-        SUSPENDED   = 'suspended',   'Suspended'        # Disciplinary action
-        RESIGNED    = 'resigned',    'Resigned'         # Voluntary separation
-        RETIRED     = 'retired',     'Retired'          # GSIS retirement
-        TERMINATED  = 'terminated',  'Terminated'       # Involuntary separation / Fired
-        DROPPED     = 'dropped',     'Dropped from Rolls' # CSC Rule XII Sec. 2 - AWOL etc.
-        DECEASED    = 'deceased',    'Deceased'         # Death in service
-        COTERMINOUS = 'coterminous', 'Coterminous'      # Position ended with appointing authority
+        SUSPENDED   = 'suspended',   'Suspended'        
+        RESIGNED    = 'resigned',    'Resigned'         
+        RETIRED     = 'retired',     'Retired'          
+        TERMINATED  = 'terminated',  'Terminated'       
+        DROPPED     = 'dropped',     'Dropped from Rolls' 
+        DECEASED    = 'deceased',    'Deceased'         
+        COTERMINOUS = 'coterminous', 'Coterminous'      
 
     # Duty Status — for real-time enforcer monitoring
     class DutyStatus(models.TextChoices):

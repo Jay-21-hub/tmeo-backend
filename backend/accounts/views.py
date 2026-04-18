@@ -69,8 +69,6 @@ class LoginView(APIView):
             serializer.errors,
             status=status.HTTP_400_BAD_REQUEST
         )
-
-
 class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -179,7 +177,7 @@ class ForgotPasswordView(APIView):
                 )
 
                 send_mail(
-                    subject    = 'TMEO — Password Reset Request',
+                    subject    = 'Password Reset Request',
                     message    = (
                         f'Hello {user.full_name},\n\n'
                         f'Click the link below to reset your password:\n'
@@ -205,8 +203,6 @@ class ForgotPasswordView(APIView):
             serializer.errors,
             status=status.HTTP_400_BAD_REQUEST
         )
-
-
 class ResetPasswordView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -246,8 +242,6 @@ class ResetPasswordView(APIView):
             serializer.errors,
             status=status.HTTP_400_BAD_REQUEST
         )
-
-
 class UserListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -278,16 +272,16 @@ class UserListView(APIView):
 
             # Send credentials via email
             send_mail(
-                subject    = 'TMEO — Your Account Has Been Created',
+                subject    = 'Your Account Has Been Created',
                 message    = (
                     f'Hello {user.full_name},\n\n'
-                    f'Your TMEO account has been created.\n\n'
+                    f'Your account has been created.\n\n'
                     f'Employee ID : {user.id_number}\n'
                     f'Email       : {user.email}\n'
                     f'Role        : {user.get_role_display()}\n'
                     f'Password    : {user._temp_password}\n\n'
                     f'Please change your password after your first login.\n\n'
-                    f'— TMEO System Administrator'
+                    f'— Administrator'
                 ),
                 from_email     = settings.DEFAULT_FROM_EMAIL,
                 recipient_list = [user.email],
@@ -312,8 +306,6 @@ class UserListView(APIView):
             serializer.errors,
             status=status.HTTP_400_BAD_REQUEST
         )
-
-
 class UserDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -406,8 +398,6 @@ class UserDetailView(APIView):
         return Response(
             {'message': f'{user.full_name} has been terminated.'}
         )
-
-
 class UpdateDutyStatusView(APIView):
     """Enforcer updates their own duty status (On Duty / On Break)."""
     permission_classes = [permissions.IsAuthenticated]
@@ -459,7 +449,6 @@ class UpdateDutyStatusView(APIView):
             serializer.errors,
             status=status.HTTP_400_BAD_REQUEST
         )
-
 class UpdateFCMTokenView(APIView):
     """
     POST /api/accounts/fcm-token/

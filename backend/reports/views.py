@@ -41,8 +41,6 @@ class DashboardStatsView(APIView):
             'approved_violations': approved_violations,
             'active_enforcers':    active_enforcers,
         })
-
-
 class ViolationByTypeView(APIView):
     """
     Violation by Type — pie/donut chart data
@@ -63,8 +61,6 @@ class ViolationByTypeView(APIView):
             'category': item['violation_type__category'],
             'count':    item['count'],
         } for item in data])
-
-
 class ViolationTrendsView(APIView):
     """
     Violation Trends — bar/line chart data
@@ -102,8 +98,6 @@ class ViolationTrendsView(APIView):
             })
 
         return Response(months)
-
-
 class ViolationHotspotsView(APIView):
     """
     Violation Hotspots —
@@ -122,8 +116,6 @@ class ViolationHotspotsView(APIView):
             'location': item['location'],
             'count':    item['count'],
         } for item in data])
-
-
 class TopEnforcersView(APIView):
     """
     Top Enforcers this month —
@@ -151,8 +143,6 @@ class TopEnforcersView(APIView):
             'badge_number': item['enforcer__badge_number'],
             'ticket_count': item['ticket_count'],
         } for item in data])
-
-
 class CollectionSummaryView(APIView):
     """
     Collection Summary —
@@ -193,8 +183,6 @@ class CollectionSummaryView(APIView):
             'pending_payments': pending_payments,
             'collection_rate':  f'{collection_rate}%',
         })
-
-
 class GenerateReportView(APIView):
     """
     Generate reports —
@@ -294,8 +282,6 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 from django.http import HttpResponse
 from violations.models import Violation
-
-
 class ExportViolationsPDFView(APIView):
     permission_classes = [IsAdminOrStaff]
 
@@ -334,8 +320,6 @@ class ExportViolationsPDFView(APIView):
         elements.append(table)
         doc.build(elements)
         return response
-
-
 class ExportViolationsExcelView(APIView):
     permission_classes = [IsAdminOrStaff]
 

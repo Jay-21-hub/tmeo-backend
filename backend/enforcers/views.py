@@ -15,7 +15,7 @@ from datetime import date
 GEOFENCE_RADIUS_METERS = 500
 
 
-# ─── Serializers ────────────────────────────────────────────────────────────
+# Serializers
 
 class EnforcerLocationSerializer(serializers.ModelSerializer):
     enforcer_detail = UserSerializer(source='enforcer', read_only=True)
@@ -42,7 +42,7 @@ class EnforcerScheduleSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
 
 
-# ─── Enforcer Management ────────────────────────────────────────────────────
+# Enforcer Management
 
 class EnforcerListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -100,7 +100,7 @@ class DeployEnforcerView(APIView):
         })
 
 
-# ─── GPS Location ───────────────────────────────────────────────────────────
+# GPS Location
 
 class LiveLocationsView(APIView):
     permission_classes = [IsAdmin]
@@ -182,7 +182,7 @@ class UpdateLocationView(APIView):
         })
 
 
-# ─── Schedule — Admin ───────────────────────────────────────────────────────
+# Schedule — Admin
 
 class ScheduleListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -241,8 +241,6 @@ class ScheduleListView(APIView):
                 status=status.HTTP_201_CREATED
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
 class ScheduleDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -298,7 +296,7 @@ class ScheduleDetailView(APIView):
         return Response({'message': 'Schedule deleted.'})
 
 
-# ─── Schedule — Enforcer (own schedule) ────────────────────────────────────
+# Schedule — Enforcer (own schedule)
 
 class MyScheduleView(APIView):
     permission_classes = [permissions.IsAuthenticated]

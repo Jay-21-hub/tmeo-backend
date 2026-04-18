@@ -41,14 +41,14 @@ def send_fcm_notification(token, title, body, data=None):
         pass  # Never block main flow for notification failures
 
 
-# ─── Deployment ─────────────────────────────────────────────────────────────
+# Deployment 
 
 def send_deployment_notification(enforcer, area, deployed_by):
     now = timezone.now().strftime("%B %d, %Y %I:%M %p")
 
     # Email → enforcer
     send_mail(
-        subject       = 'TMEO — Deployment Notice',
+        subject       = 'Traffic Enforcement and Violation Management System — Deployment Notice',
         message       = f'''Good day, {enforcer.full_name}!
 
 You have been deployed to the following area:
@@ -59,7 +59,7 @@ You have been deployed to the following area:
 
 Please report to your designated area immediately.
 
-— TMEO System''',
+— Traffic Enforcement and Violation Management System, Lucena City''',
         from_email    = settings.DEFAULT_FROM_EMAIL,
         recipient_list= [enforcer.email],
         fail_silently = False,
@@ -70,7 +70,7 @@ Please report to your designated area immediately.
     admin_emails = list(admins.values_list('email', flat=True))
     if admin_emails:
         send_mail(
-            subject       = f'TMEO — Enforcer Deployed: {enforcer.full_name}',
+            subject       = f'Traffic Enforcement and Violation Management System — Enforcer Deployed: {enforcer.full_name}',
             message       = f'''Deployment Alert
 
 Enforcer   : {enforcer.full_name}
@@ -79,7 +79,7 @@ Area       : {area}
 Deployed by: {deployed_by.full_name}
 Time       : {now}
 
-— TMEO System''',
+— Traffic Enforcement and Violation Management System, Lucena City''',
             from_email    = settings.DEFAULT_FROM_EMAIL,
             recipient_list= admin_emails,
             fail_silently = False,
@@ -94,7 +94,7 @@ Time       : {now}
     )
 
 
-# ─── Geofence ───────────────────────────────────────────────────────────────
+# Geofence 
 
 def send_geofence_alert(enforcer, current_lat, current_lon,
                         assigned_lat, assigned_lon, distance_meters):
@@ -105,7 +105,7 @@ def send_geofence_alert(enforcer, current_lat, current_lon,
     # Email → all admins
     if admin_emails:
         send_mail(
-            subject       = f'TMEO — Geofence Alert: {enforcer.full_name}',
+            subject       = f'Traffic Enforcement and Violation Management System  — Geofence Alert: {enforcer.full_name}',
             message       = f'''⚠️ GEOFENCE ALERT
 
 Enforcer  : {enforcer.full_name}
@@ -121,7 +121,7 @@ Distance from Area: {distance_meters:.0f} meters
 
 Please verify the enforcer's location immediately.
 
-— TMEO System''',
+— Traffic Enforcement and Violation Management System, Lucena City''',
             from_email    = settings.DEFAULT_FROM_EMAIL,
             recipient_list= admin_emails,
             fail_silently = True,
@@ -146,7 +146,7 @@ Please verify the enforcer's location immediately.
         )
 
 
-# ─── Violation Issued ────────────────────────────────────────────────────────
+# Violation Issued
 
 def send_violation_notification(violation):
     """
