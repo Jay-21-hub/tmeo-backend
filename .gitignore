@@ -16,3 +16,12 @@ firebase-credentials.json
 .idea/
 .vscode/
 .DS_Store
+
+node_modules/
+dist/
+dev-dist/
+
+# Secrets and archives
+*credentials*.json*
+*-adminsdk-*.json
+*.zip
