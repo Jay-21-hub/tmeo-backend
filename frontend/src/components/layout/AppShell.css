@@ -1,0 +1,19 @@
+.app-shell { display: flex; height: 100vh; height: 100dvh; background: var(--auth-bg); overflow: hidden; }
+
+.app-shell-main {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0;
+  transition: margin-left var(--transition-base);
+}
+
+.app-shell-content { flex: 1; overflow: auto; background: var(--auth-bg); }
+
+.app-shell-loading {
+  display: flex; align-items: center; justify-content: center; height: 100vh; height: 100dvh;
+  background: var(--auth-navy); flex-direction: column; gap: 16;
+}
+
+@keyframes shell-fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .app-shell-main { transition: none; }
+  .app-shell-content .page-shell-inner { animation: none !important; }
+}

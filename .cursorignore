@@ -1,0 +1,10 @@
+.env
+.env.*
+**/firebase-credentials.json
+**/venv/
+**/.venv/
+**/node_modules/
+**/__pycache__/
+**/dist/
+**/build/
+*.sqlite3

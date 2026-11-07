@@ -1,0 +1,20 @@
+/* Page-specific overrides for the Leaflet map chrome — kept local to this
+   page rather than in the shared design system, since Leaflet needs direct
+   selector overrides on its own generated classes. */
+.leaflet-control-zoom { display: none !important; }
+.leaflet-control-attribution { display: none !important; }
+.leaflet-tooltip {
+  background: var(--white) !important; border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-md) !important; box-shadow: var(--shadow-lg) !important; padding: 0 !important;
+}
+.leaflet-tooltip::before { display: none !important; }
+
+.gis-live-dot { animation: gis-pulse 2s infinite; }
+@keyframes gis-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+.map-ctrl-btn {
+  width: 36px; height: 36px; border: 1px solid var(--color-border); background: var(--white);
+  border-radius: var(--radius-md); cursor: pointer; display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-sm); color: var(--slate-700); transition: background var(--transition-fast), color var(--transition-fast);
+}
+.map-ctrl-btn:hover { background: var(--blue-50); color: var(--blue-600); }

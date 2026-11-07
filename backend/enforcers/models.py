@@ -21,41 +21,41 @@ class EnforcerLocation(models.Model):
     )
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Geofence episode ledger (see UpdateLocationView). Internal bookkeeping,
+    # never serialized. `outside_since` is set when an on-duty fix first lands
+    # outside the Lucena-center radius and cleared when the enforcer returns
+    # inside, goes off duty or signs off. `last_alert_at` backs the 15-minute
+    # jitter cooldown. Neither field is touched by freshness / live-map logic.
+    geofence_outside_since = models.DateTimeField(null=True, blank=True)
+    geofence_last_alert_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         db_table = 'enforcer_locations'
 
     def __str__(self):
         return f'{self.enforcer.full_name} - {self.status}'
-    
+
+
 class EnforcerSchedule(models.Model):
     """
-    Permanent monthly schedule for enforcers.
-    Plottable on calendar — one record per enforcer per day.
+    Monthly schedule for enforcers.
+    One record per enforcer per day.
     """
 
-    class ShiftType(models.TextChoices):
-        MORNING   = 'morning',   'Morning Shift (6AM - 2PM)'
-        AFTERNOON = 'afternoon', 'Afternoon Shift (2PM - 10PM)'
-        NIGHT     = 'night',     'Night Shift (10PM - 6AM)'
-        CUSTOM    = 'custom',    'Custom Shift'
-
     enforcer      = models.ForeignKey(
-        CustomUser, on_delete=models.CASCADE,
+        CustomUser, on_delete=models.PROTECT,
         related_name='schedules',
         limit_choices_to={'role': CustomUser.Role.ENFORCER}
     )
     date          = models.DateField()
-    shift_type    = models.CharField(
-        max_length=20,
-        choices=ShiftType.choices,
-        default=ShiftType.MORNING
-    )
     shift_start   = models.TimeField()
     shift_end     = models.TimeField()
+    break_start   = models.TimeField(null=True, blank=True)
+    break_end     = models.TimeField(null=True, blank=True)
     assigned_area = models.CharField(max_length=200)
     notes         = models.TextField(blank=True)
     created_by    = models.ForeignKey(
-        CustomUser, on_delete=models.SET_NULL, null=True,
+        CustomUser, on_delete=models.PROTECT, null=True,
         related_name='schedules_created'
     )
     created_at    = models.DateTimeField(auto_now_add=True)
@@ -63,7 +63,6 @@ class EnforcerSchedule(models.Model):
 
     class Meta:
         db_table = 'enforcer_schedules'
-        # One schedule per enforcer per day
         unique_together = ['enforcer', 'date']
         ordering        = ['date', 'shift_start']
         indexes         = [
@@ -73,7 +72,4 @@ class EnforcerSchedule(models.Model):
         ]
 
     def __str__(self):
-        return (
-            f'{self.enforcer.full_name} — '
-            f'{self.date} ({self.get_shift_type_display()})'
-        )
+        return f'{self.enforcer.full_name} — {self.date} ({self.shift_start} - {self.shift_end})'

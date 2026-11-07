@@ -1,0 +1,19 @@
+/* Compact circular profile control (Topbar + EnforcerShell). */
+.profile-trigger {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 44px; height: 44px; padding: 0; border: none; border-radius: 50%;
+  background: transparent; cursor: pointer;
+}
+.profile-trigger-avatar {
+  box-shadow: 0 0 0 1.5px var(--slate-300);
+  transition: box-shadow 180ms ease, transform 180ms ease;
+}
+.profile-trigger:hover .profile-trigger-avatar { box-shadow: 0 0 0 2px var(--navy-700); transform: scale(1.03); }
+.profile-trigger:active .profile-trigger-avatar { transform: scale(0.97); }
+.profile-trigger:focus-visible { outline: none; box-shadow: var(--auth-focus); }
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-trigger-avatar { transition: none; }
+  .profile-trigger:hover .profile-trigger-avatar,
+  .profile-trigger:active .profile-trigger-avatar { transform: none; }
+}

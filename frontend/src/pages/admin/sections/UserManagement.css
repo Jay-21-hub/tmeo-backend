@@ -1,0 +1,89 @@
+/* Admin → User Management: compact, information-dense users table.
+   Every rule is scoped under .um (page) or .um-menu* (the portalled More menu),
+   so the shared .table / .filter-bar / .badge / .btn styles used by Reports,
+   Audit Trail, Manage Enforcers, Violation Types, Staff and Enforcer UI are untouched. */
+.um { font-family: Helvetica, Arial, sans-serif; }
+.um .input, .um .filter-select, .um .btn, .um .badge { font-family: inherit; }
+
+/* ---------------------------------------------------------------- KPI cards
+   Same dynamic StatCard markup; re-laid out icon-left / label+value-right and
+   tightened. StatCard itself is shared, so this is done with scoped CSS only. */
+.um .kpi-grid { gap: 12px; margin-bottom: 12px; }
+.um .kpi-grid .card {
+  display: grid; grid-template-columns: auto 1fr; column-gap: 14px; row-gap: 0; align-items: center;
+  padding: 12px 16px; box-shadow: var(--shadow-xs);
+}
+.um .kpi-grid .card:hover { transform: none; box-shadow: var(--shadow-xs); }
+/* StatCard's header row has inline display:flex + margin-bottom, so these need !important to win */
+.um .kpi-grid .card > div:first-child { display: contents !important; margin: 0 !important; }
+.um .kpi-grid .card > div:first-child > span[aria-hidden="true"] {
+  grid-column: 1; grid-row: 1 / span 2; width: 40px !important; height: 40px !important; border-radius: 10px !important;
+}
+.um .kpi-grid .card > div:first-child > .text-label { grid-column: 2; grid-row: 1; font-size: 11px; font-weight: 600; letter-spacing: .05em; line-height: 1.3; }
+.um .kpi-grid .card > div:last-child { grid-column: 2; grid-row: 2; }
+.um .kpi-grid .text-display { font-size: 28px !important; line-height: 1.1; font-weight: 700; }
+
+/* ---------------------------------------------------------------- Toolbar: one 38px control height */
+.um .filter-bar { padding: 8px 10px; gap: 8px; margin-bottom: 12px; box-shadow: none; }
+.um .filter-bar .input,
+.um .filter-bar .filter-select { height: 38px; padding-top: 0; padding-bottom: 0; font-size: 13px; border-radius: var(--radius-md); box-sizing: border-box; }
+.um .filter-bar .input { padding-left: 34px; }
+.um .filter-bar .btn { height: 38px; padding-top: 0; padding-bottom: 0; font-size: 13px; }
+
+/* ---------------------------------------------------------------- Table */
+.um .table-wrap { box-shadow: none; }
+.um .um-table { table-layout: fixed; width: 100%; min-width: 1000px; }
+.um .um-table thead th {
+  position: static; padding: 9px 12px; font-size: 11px; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--slate-600); background: var(--slate-50); font-family: Helvetica, Arial, sans-serif;
+}
+.um .um-table thead th:first-child { padding-left: 14px; }
+.um .um-table tbody tr { height: 56px; }
+.um .um-table tbody td {
+  padding: 8px 12px; font-size: 12px; line-height: 1.35; color: var(--slate-700);
+  vertical-align: middle; overflow: hidden; border-bottom: 1px solid var(--slate-100); font-family: Helvetica, Arial, sans-serif;
+}
+.um .um-table tbody td:first-child { padding-left: 14px; }
+.um .um-table tbody tr:last-child td { border-bottom: none; }
+
+.um .um-user { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.um .um-name { font-size: 12.5px; font-weight: 600; color: var(--slate-950); min-width: 0; }
+.um .um-cell-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.um .um-mono { font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 11.5px; }
+
+.um .um-table .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; line-height: 1.5; }
+.um .um-table td:nth-child(4) .badge { font-size: 10.5px; padding: 1px 8px; }
+
+/* ---------------------------------------------------------------- Actions: [View] [Edit] [⋯] */
+.um .um-actions { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.um .um-btn { height: 30px; padding: 0 10px; gap: 5px; font-size: 12px; font-weight: 600; border-radius: 8px; }
+.um .um-btn:focus-visible, .um-menu-item:focus-visible { outline: 2px solid var(--blue-500); outline-offset: 1px; }
+.um .um-more { width: 30px; padding: 0; }
+.um .um-more[aria-expanded="true"] { background: var(--slate-100); }
+
+/* ---------------------------------------------------------------- Footer / pagination */
+.um .um-foot {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  padding: 8px 14px; border-top: 1px solid var(--slate-100); background: var(--slate-50);
+}
+.um .um-foot .text-caption { font-size: 12px; margin: 0; }
+.um .um-foot .pagination { gap: 6px; }
+.um .page-btn { padding: 0; min-width: 30px; height: 30px; font-size: 12px; border-radius: 8px; }
+
+/* ---------------------------------------------------------------- More menu (portalled to <body>, so scoped by its own prefix) */
+.um-menu-panel { border-radius: 10px; border-width: 1px; box-shadow: var(--shadow-lg); }
+.um-menu { display: flex; flex-direction: column; padding: 4px; font-family: Helvetica, Arial, sans-serif; }
+.um-menu-item {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 0; border-radius: 6px;
+  background: none; cursor: pointer; text-align: left; font: 500 12.5px/1.2 Helvetica, Arial, sans-serif; color: var(--slate-700);
+  transition: background var(--transition-fast);
+}
+.um-menu-item:hover:not(:disabled), .um-menu-item:focus-visible { background: var(--slate-50); }
+.um-menu-item:disabled { opacity: .5; cursor: not-allowed; }
+.um-menu-item--danger { color: var(--danger-600); }
+.um-menu-item--danger:hover:not(:disabled), .um-menu-item--danger:focus-visible { background: var(--danger-50); }
+.um-menu-sep { height: 1px; margin: 4px 2px; background: var(--slate-100); }
+
+@media (prefers-reduced-motion: reduce) {
+  .um .table tbody tr, .um-menu-item { transition: none; }
+}

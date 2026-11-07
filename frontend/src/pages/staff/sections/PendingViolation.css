@@ -1,0 +1,104 @@
+/* Staff → Pending Violations: compact operations workspace.
+   Every rule is scoped under .pv so shared .card / .table / .badge styles used by
+   other modules are untouched. Motion = CSS only (opacity/transform). */
+.pv { font-family: Helvetica, Arial, sans-serif; }
+
+/* ── Header ── */
+.pv-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.pv-title { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 700; color: var(--navy-900); }
+.pv-refresh { flex-shrink: 0; transition: background-color 120ms ease, border-color 120ms ease; }
+.pv-refresh:focus-visible, .pv-act:focus-visible, .pv-searchbox-clear:focus-visible { outline: 2px solid var(--blue-500); outline-offset: 2px; }
+
+/* ── KPI row ── */
+.pv-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+.pv-kpi { display: flex; align-items: center; gap: 12px; min-height: 84px; padding: 12px 16px; box-sizing: border-box; background: var(--white); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-xs); }
+.pv-kpi-icon { width: 38px; height: 38px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--pv-accent); background: color-mix(in srgb, var(--pv-accent) 12%, white); }
+.pv-kpi-body { min-width: 0; }
+.pv-kpi-label { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--slate-600); }
+.pv-kpi-value { margin: 1px 0 0; font-size: 24px; line-height: 1.15; font-weight: 700; color: var(--slate-950); font-variant-numeric: tabular-nums; }
+.pv-kpi-skel { height: 28px; width: 56px; margin: 1px 0; }
+.pv-kpi-sub { margin: 1px 0 0; font-size: 12px; line-height: 1.35; color: var(--slate-600); }
+
+/* ── Search workspace ── */
+.pv-search { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; padding: 12px 16px; margin-bottom: 14px; background: var(--white); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-xs); }
+.pv-h2 { margin: 0; font-size: 15px; line-height: 1.3; font-weight: 700; color: var(--navy-900); }
+.pv-caption { margin: 2px 0 0; font-size: 12px; color: var(--slate-600); }
+.pv-searchbox { position: relative; flex: 1 1 320px; max-width: 560px; min-width: 0; }
+.pv-searchbox .input { width: 100%; box-sizing: border-box; height: 40px; padding: 0 34px; font: 400 13px Helvetica, Arial, sans-serif; background: var(--white); border-radius: var(--radius-md); transition: border-color 120ms ease, box-shadow 120ms ease; }
+.pv-searchbox-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--slate-400); pointer-events: none; }
+.pv-searchbox-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border: 0; background: none; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; color: var(--slate-500); cursor: pointer; }
+.pv-searchbox-clear:hover { color: var(--slate-900); background: var(--slate-100); }
+
+/* ── Records surface ── */
+.pv-records { background: var(--white); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-xs); overflow: hidden; }
+.pv-records-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 16px; padding: 12px 16px; border-bottom: 1px solid var(--slate-100); }
+.pv-count { font-weight: 600; color: var(--slate-600); }
+.pv-records-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
+.pv-summary { margin: 0; font-size: 12px; color: var(--slate-600); }
+.pv-summary strong { color: var(--slate-950); }
+.pv-muted { color: var(--slate-500); }
+.pv-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.pv-tablewrap { border: 0; border-radius: 0; }
+.pv-table { min-width: 980px; }
+.pv-table thead th { padding: 9px 8px; font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--slate-600); white-space: normal; line-height: 1.25; vertical-align: bottom; }
+.pv-table tbody td { padding: 8px 8px; font-size: 12.5px; line-height: 1.35; color: var(--slate-700); vertical-align: middle; }
+.pv-table th:first-child, .pv-table td:first-child { padding-left: 16px; }
+.pv-table th:last-child, .pv-table td:last-child { padding-right: 16px; }
+.pv-id { font-weight: 700; color: var(--blue-600); }
+.pv-name { font-weight: 700; color: var(--slate-950); }
+.pv-plate { font-weight: 700; letter-spacing: .03em; color: var(--slate-950); white-space: nowrap; }
+.pv-cap { text-transform: capitalize; white-space: nowrap; }
+.pv-nowrap { white-space: nowrap; }
+.pv-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; max-width: 200px; }
+.pv-clamp--sm { max-width: 130px; }
+.pv-clamp--type { min-width: 90px; max-width: 190px; }
+.pv-clamp--loc { min-width: 130px; max-width: 220px; }
+.pv-table td.mono { white-space: nowrap; }
+.pv-status { white-space: nowrap; }
+
+.pv-act { background: var(--blue-600); color: #fff; white-space: nowrap; transition: background-color 120ms ease, box-shadow 120ms ease; }
+.pv-act:hover { background: var(--blue-700); box-shadow: 0 1px 4px rgba(11,24,48,.25); }
+.pv-act--resume { background: var(--warning-600); }
+.pv-act--resume:hover { background: var(--warning-700); }
+.pv-locked { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.pv-locked-pill { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: var(--radius-md); background: var(--slate-100); color: var(--slate-500); font-size: 12px; font-weight: 700; cursor: not-allowed; white-space: nowrap; border: 1px solid var(--color-border); }
+.pv-locked-note { font-size: 10.5px; line-height: 1.3; color: var(--warning-700); font-weight: 600; max-width: 130px; }
+
+/* ── Empty / error: compact, centered in the visible width (not the scroll width) ── */
+.pv-state { min-height: 200px; display: flex; align-items: center; justify-content: center; }
+.pv-state .empty-state { padding: 28px 24px; }
+.pv-state .empty-state-icon { width: 48px; height: 48px; margin-bottom: 12px; }
+
+/* ── Pagination footer ── */
+.pv-pager { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--slate-100); background: var(--slate-50); font-size: 12px; color: var(--slate-600); }
+.pv-pager strong { color: var(--slate-950); }
+
+/* ── Motion: short, once, transform/opacity only (total < 450ms) ── */
+@keyframes pv-rise { from { opacity: 0; transform: translateY(6px); } }
+@keyframes pv-fade { from { opacity: 0; } }
+.pv-kpi { animation: pv-rise 260ms cubic-bezier(.22,1,.36,1) calc(var(--pv-i, 0) * 45ms) backwards; }
+.pv-search { animation: pv-fade 280ms ease-out 140ms backwards; }
+.pv-records { animation: pv-fade 300ms ease-out 180ms backwards; }
+
+/* ── Responsive ── */
+@media (max-width: 1099px) {
+  .pv-kpis { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 639px) {
+  .pv-title { font-size: 21px; }
+  .pv-kpis { gap: 8px; }
+  .pv-kpi { flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px; }
+  .pv-kpi-icon { width: 32px; height: 32px; }
+  .pv-search { padding: 12px; }
+  .pv-searchbox { flex-basis: 100%; max-width: none; }
+  .pv-records-head, .pv-pager { padding-left: 12px; padding-right: 12px; }
+  .pv-pager { justify-content: center; }
+  .pv-searchbox .input { height: 44px; }
+  .pv-refresh { min-height: 36px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pv-kpi, .pv-search, .pv-records { animation: none; }
+  .pv-refresh, .pv-act, .pv-searchbox .input { transition: none; }
+}

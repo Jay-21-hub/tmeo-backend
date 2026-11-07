@@ -1,0 +1,29 @@
+/* Change Role modal — every rule is scoped under .crm so shared modal/alert/field styles are untouched. */
+.crm { display: grid; gap: 14px; font-family: Helvetica, Arial, sans-serif; }
+.crm-user { background: var(--slate-50); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 12px 14px; min-width: 0; }
+.crm-user-name { margin: 0; font-size: 14px; font-weight: 700; color: var(--slate-950); overflow-wrap: anywhere; }
+.crm-user-meta { margin: 2px 0 0; font-size: 12px; color: var(--slate-600); overflow-wrap: anywhere; }
+.crm-transition { display: flex; align-items: stretch; gap: 10px; }
+.crm-role { flex: 1 1 0; min-width: 0; border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 10px 12px; }
+.crm-role--to { border-color: var(--blue-500); background: var(--blue-50); }
+.crm-role-label { margin: 0 0 2px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--slate-600); }
+.crm-role-value { margin: 0; font-size: 13px; font-weight: 700; color: var(--slate-950); overflow-wrap: anywhere; }
+.crm-arrow { align-self: center; flex-shrink: 0; color: var(--slate-400); display: flex; }
+.crm-notes { margin: 6px 0 0; padding-left: 18px; font-size: 12px; line-height: 1.5; }
+.crm-counter { font-size: 11px; color: var(--slate-600); text-align: right; margin-top: 2px; }
+.crm-counter--limit { color: var(--danger-600); font-weight: 600; }
+.crm .textarea { width: 100%; box-sizing: border-box; }
+@media (max-width: 480px) {
+  .crm-transition { flex-direction: column; }
+  .crm-arrow { transform: rotate(90deg); }
+}
+
+/* ---- Success state ---- */
+.crm-success-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.crm-ids { display: grid; gap: 10px; }
+.crm-id-prev { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 10px 12px; background: var(--slate-50); }
+.crm-id-prev-value { margin: 0; font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 13px; color: var(--slate-600); text-decoration: line-through; overflow-wrap: anywhere; }
+.crm-id-new { border: 2px solid var(--success-600); border-radius: var(--radius-md); padding: 12px 14px; background: var(--success-50); display: grid; gap: 8px; justify-items: start; }
+.crm-id-new-value { margin: 0; font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 22px; font-weight: 700; letter-spacing: .02em; color: var(--slate-950); user-select: all; overflow-wrap: anywhere; }
+.crm-id-missing { margin: 0; font-size: 13px; color: var(--danger-600); }
+.crm-copy-status { font-size: 12px; color: var(--slate-700); min-height: 16px; }

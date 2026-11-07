@@ -1,0 +1,439 @@
+/* ==========================================================================
+   ENFORCER MOBILE APP SHELL
+   Dedicated, app-first chrome for the field/enforcer role. Independent of
+   the admin/staff Sidebar+AppShell so it can be tuned purely for phones.
+   ========================================================================== */
+
+.ef-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--auth-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.ef-shell-loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--auth-navy);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---- Top bar ---- */
+.ef-topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  background: var(--white);
+  border-bottom: 1px solid var(--slate-100);
+  padding-top: env(safe-area-inset-top, 0);
+}
+
+.ef-topbar-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 6px;
+}
+
+.ef-topbar-logo { width: 38px; height: 38px; border-radius: var(--radius-lg); object-fit: cover; flex-shrink: 0; border: 1px solid var(--slate-200); }
+
+.ef-topbar-titles { min-width: 0; flex: 1; }
+.ef-topbar-title {
+  font: var(--text-h3);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ef-topbar-sub { font: var(--text-caption); color: var(--color-text-muted); margin-top: 1px; }
+
+.ef-topbar-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+
+.ef-icon-btn {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: transparent;
+  color: var(--slate-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.ef-icon-btn:hover { background: var(--slate-100); }
+.ef-icon-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: var(--radius-full);
+  background: var(--danger-600);
+  color: var(--white);
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--white);
+}
+
+/* Icon-only header controls (More, Profile). 44px hit targets; the bell
+   (.notif-bell-btn, sized in NotificationBell.css) is lifted to match. */
+.ef-account-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border: none; background: transparent; cursor: pointer;
+  color: var(--navy-700); border-radius: var(--radius-full);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.ef-account-btn:hover { background: var(--slate-100); }
+.ef-account-btn.is-active { background: var(--auth-gold-soft); color: var(--auth-gold-ink); }
+.ef-account-btn:focus-visible, .ef-topbar .notif-bell-btn:focus-visible, .ef-tab:focus-visible, .ef-fab:focus-visible, .ef-duty-strip:focus-visible { outline: none; box-shadow: var(--auth-focus); }
+.ef-topbar .notif-bell-btn { width: 44px; height: 44px; }
+
+/* Duty status strip — signature persistent field-awareness bar */
+.ef-duty-strip {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 14px;
+  min-height: 32px;
+  border: none;
+  border-top: 1px solid var(--slate-100);
+  background: var(--slate-50);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+.ef-duty-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.ef-duty-label { font-weight: 700; flex-shrink: 0; }
+.ef-duty-sep { color: var(--slate-300); flex-shrink: 0; }
+.ef-duty-area { color: var(--color-text-secondary); min-width: 0; }
+
+/* ---- Content ---- */
+.ef-content {
+  flex: 1;
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 14px 14px calc(104px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+
+.ef-page-fade { animation: ef-fade-in 0.22s var(--ease) both; }
+@keyframes ef-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---- Bottom nav ---- */
+.ef-bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  background: var(--white);
+  border-top: 1px solid var(--slate-100);
+  box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.08);
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0));
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.ef-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 6px 2px;
+  color: var(--slate-500);
+  min-height: 48px;
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 0;
+  transition: color var(--transition-base);
+}
+.ef-tab span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.ef-tab:active { transform: scale(0.96); }
+.ef-tab.is-active { color: var(--auth-navy); }
+
+.ef-tab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  background: transparent;
+  transition: background var(--transition-base), transform var(--transition-base);
+}
+.ef-tab-icon svg { transition: transform var(--transition-base); }
+.ef-tab.is-active .ef-tab-icon { background: var(--auth-gold); }
+.ef-tab.is-active .ef-tab-icon svg { transform: translateY(-0.5px) scale(1.05); }
+
+.ef-fab-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.ef-fab {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 3px solid var(--white);
+  background: var(--auth-gold);
+  color: var(--auth-on-gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-top: -28px;
+  box-shadow: 0 6px 16px rgba(16, 33, 66, 0.28);
+  transition: transform var(--transition-fast);
+}
+.ef-fab:active { transform: scale(0.94); }
+.ef-fab.is-active { box-shadow: 0 0 0 4px var(--auth-gold-soft), 0 6px 16px rgba(16, 33, 66, 0.28); }
+.ef-fab-label { font-size: 10px; font-weight: 700; color: var(--auth-navy); margin-top: 1px; }
+
+/* ---- Profile sheet ---- */
+.ef-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.ef-sheet {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  background: var(--white);
+  border-radius: 20px 20px 0 0;
+  padding: 10px 20px calc(24px + env(safe-area-inset-bottom, 0));
+  animation: ef-sheet-up 0.24s var(--ease) both;
+}
+@keyframes ef-sheet-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.ef-sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--slate-200);
+  margin: 4px auto 14px;
+}
+
+/* Variant for taller content (e.g. report detail) — pinned handle/close,
+   independently scrollable body so the sheet never exceeds the viewport. */
+.ef-sheet--scrollable {
+  max-height: 86dvh;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.ef-sheet-body {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 0 20px 24px;
+  margin: 0 -20px;
+}
+.ef-sheet-close {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: var(--slate-100);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--slate-600);
+  cursor: pointer;
+}
+.ef-sheet-profile { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.ef-sheet-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--warning-600);
+  color: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.ef-sheet-name { font: var(--text-h3); color: var(--color-text-primary); }
+.ef-sheet-id { font: var(--text-caption); color: var(--color-text-muted); margin-top: 1px; }
+
+.ef-sheet-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--slate-100);
+}
+.ef-sheet-row:last-child { border-bottom: none; }
+.ef-sheet-row-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--slate-100);
+  color: var(--slate-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ef-sheet-row-label { font: var(--text-label); color: var(--color-text-muted); }
+.ef-sheet-row-value { font-size: 13px; font-weight: 500; margin-top: 1px; color: var(--slate-950); }
+.ef-sheet-row-value.is-empty { color: var(--slate-400); font-style: italic; }
+.ef-sheet-logout {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--danger-100);
+  background: var(--danger-50);
+  color: var(--danger-700);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* ---- Tablet/desktop: same sheets, compact centered dialog instead of a
+   full-width bottom sheet. The Enforcer shell is mobile-first by design
+   (bottom-anchored sheets are the right idiom on a phone), but at wider
+   viewports a sheet pinned to the bottom edge and stretched toward
+   86dvh tall reads as an oversized panel rather than a focused dialog.
+   This mirrors the shared Modal's own centered sizing (.modal-panel:
+   radius-xl, shadow-xl, max-height: min(90vh, 640px)) so the two dialog
+   systems feel like one product once there's room to center them. Below
+   this breakpoint, .ef-sheet keeps its original bottom-sheet behavior
+   untouched. Applies to every .ef-sheet caller (More options, Profile,
+   Report Details) since they share this one pattern. */
+@media (min-width: 640px) {
+  .ef-sheet-overlay { align-items: center; padding: var(--space-4); }
+  .ef-sheet {
+    width: 100%;
+    max-width: 440px;
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+    animation: ef-sheet-in-centered var(--transition-base) both;
+  }
+  .ef-sheet--scrollable { max-height: min(90vh, 640px); }
+}
+@keyframes ef-sheet-in-centered { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+
+/* ---- Report Details sheet: content-sized width + explicit header/body/
+   footer regions. Scoped to .ef-sheet--report-detail (always combined with
+   .ef-sheet.ef-sheet--scrollable in the markup) so the Profile and More
+   options sheets — which reuse the same base classes — keep their current
+   fixed 440px / full-width-button behavior untouched. Declared after the
+   base .ef-sheet rules above so it wins the cascade on shared properties
+   like padding and max-height. */
+.ef-sheet--report-detail {
+  padding: 0;
+  padding-bottom: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ef-sheet--report-detail .ef-sheet-body {
+  margin: 0;
+  padding: 0 20px 16px;
+}
+.ef-sheet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 48px 14px 20px;
+  border-bottom: 1px solid var(--slate-100);
+  flex-shrink: 0;
+}
+.ef-sheet-footer {
+  flex-shrink: 0;
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0));
+  border-top: 1px solid var(--slate-100);
+  display: flex;
+  justify-content: flex-end;
+}
+/* Full-width on phones (thumb-friendly, matches the rest of the enforcer
+   flow); becomes a compact right-aligned button once centered on tablet/
+   desktop — see the >=640px block below. */
+.ef-sheet-footer .btn { width: 100%; }
+
+@media (min-width: 640px) {
+  /* Content-sized dynamic width: same min()/calc() pattern already used
+     for .toast-stack, replacing the shared .ef-sheet's flat 440px cap so
+     the dialog shrinks on narrower laptop/tablet viewports instead of
+     just relying on a single fixed breakpoint value. */
+  .ef-sheet--report-detail {
+    width: min(480px, calc(100vw - 48px));
+    max-width: none;
+  }
+  /* Viewport-safe max height (dvh-based, with a sane desktop ceiling)
+     instead of the shared min(90vh, 640px) cap, so laptop-height windows
+     get a bit more room before the body has to scroll. */
+  .ef-sheet--report-detail.ef-sheet--scrollable {
+    max-height: min(720px, calc(100dvh - 64px));
+  }
+  /* The drag handle is a mobile bottom-sheet affordance; once the sheet is
+     a centered dialog it has no function and just eats top space. */
+  .ef-sheet--report-detail .ef-sheet-handle {
+    display: none;
+  }
+  .ef-sheet-footer .btn {
+    width: auto;
+    min-width: 100px;
+  }
+}
+
+/* ---- Small phones ---- */
+@media (max-width: 359px) {
+  .ef-tab { font-size: 9px; }
+  .ef-fab { width: 52px; height: 52px; margin-top: -24px; }
+}
+
+/* ---- Reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .ef-page-fade { animation: none; }
+  .ef-sheet { animation: none; }
+  .ef-tab, .ef-tab-icon, .ef-tab-icon svg, .ef-fab { transition: none; }
+  .ef-tab:active, .ef-fab:active { transform: none; }
+  .ef-tab.is-active .ef-tab-icon svg { transform: none; }
+}
+
+/* The phone shell already shows the page title in .ef-topbar-title, so the
+   in-screen PageHeader (used by the desktop/tablet AppShell) stays hidden here. */
+.ef-shell .page-header { display: none !important; } /* beats the inline flex on PageHeader */

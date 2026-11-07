@@ -1,61 +1,29 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from accounts.permissions import IsAdmin, IsAdminOrStaff
+from accounts.permissions import IsAdminOrStaff
 from django.utils import timezone
-from django.db.models import Count, Sum, Q
-from datetime import timedelta
+from django.db.models import Count, Sum
 
-from violations.models import Violation, ViolationType
-from accounts.models import CustomUser
+from violations.models import Violation
+from accounts.identity import latest_enforcer_snapshots, grouped_enforcer_identity
 
 
-class DashboardStatsView(APIView):
-    """
-    Main dashboard stats —
-    Total violations, today, pending, approved, active enforcers
-    """
-    permission_classes = [IsAdmin]
-
-    def get(self, request):
-        today = timezone.now().date()
-
-        total_violations    = Violation.objects.count()
-        violations_today    = Violation.objects.filter(
-            created_at__date=today
-        ).count()
-        pending_assessments = Violation.objects.filter(
-            status='pending'
-        ).count()
-        approved_violations = Violation.objects.filter(
-            status='approved'
-        ).count()
-        active_enforcers    = CustomUser.objects.filter(
-            role='enforcer', is_active=True
-        ).count()
-
-        return Response({
-            'total_violations':    total_violations,
-            'violations_today':    violations_today,
-            'pending_assessments': pending_assessments,
-            'approved_violations': approved_violations,
-            'active_enforcers':    active_enforcers,
-        })
 class ViolationByTypeView(APIView):
     """
     Violation by Type — pie/donut chart data
     Distribution of violation categories
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
 
     def get(self, request):
-        data = Violation.objects.values(
-            'violation_type__name',
-            'violation_type__category',
-        ).annotate(
-            count=Count('id')
-        ).order_by('-count')
-
+        from violations.models import ViolationItem  
+        data = (
+            ViolationItem.objects
+            .values('violation_type__name', 'violation_type__category')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
         return Response([{
             'name':     item['violation_type__name'],
             'category': item['violation_type__category'],
@@ -66,26 +34,22 @@ class ViolationTrendsView(APIView):
     Violation Trends — bar/line chart data
     Monthly violation records over the past 7 months
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
 
     def get(self, request):
-        today    = timezone.now()
-        months   = []
+        import calendar
+        from datetime import date as date_type
+
+        today  = timezone.now()
+        months = []
 
         for i in range(6, -1, -1):
-            # Go back i months from today
-            month_date  = today - timedelta(days=i * 30)
-            month_start = month_date.replace(day=1).date()
+            month_offset = today.month - i
+            year  = today.year + (month_offset - 1) // 12
+            month = ((month_offset - 1) % 12) + 1
 
-            # Get last day of month
-            if month_date.month == 12:
-                month_end = month_date.replace(
-                    day=31
-                ).date()
-            else:
-                month_end = month_date.replace(
-                    month=month_date.month + 1, day=1
-                ).date() - timedelta(days=1)
+            month_start = date_type(year, month, 1)
+            month_end   = date_type(year, month, calendar.monthrange(year, month)[1])
 
             count = Violation.objects.filter(
                 created_at__date__gte=month_start,
@@ -93,7 +57,7 @@ class ViolationTrendsView(APIView):
             ).count()
 
             months.append({
-                'month': month_date.strftime('%b %Y'),
+                'month': month_start.strftime('%b %Y'),
                 'count': count,
             })
 
@@ -103,7 +67,7 @@ class ViolationHotspotsView(APIView):
     Violation Hotspots —
     Top 3 locations with most violations
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
 
     def get(self, request):
         data = Violation.objects.values(
@@ -121,34 +85,42 @@ class TopEnforcersView(APIView):
     Top Enforcers this month —
     Most active enforcement officers
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
 
     def get(self, request):
         today       = timezone.now()
         month_start = today.replace(day=1).date()
 
-        data = Violation.objects.filter(
-            created_at__date__gte=month_start
+        data = list(Violation.objects.filter(
+            created_at__date__gte=month_start,
         ).values(
             'enforcer__full_name',
-            'enforcer__badge_number',
             'enforcer__id',
         ).annotate(
             ticket_count=Count('id')
-        ).order_by('-ticket_count')[:3]
+        ).order_by('-ticket_count', 'enforcer__id')[:3])
 
-        return Response([{
-            'id':           item['enforcer__id'],
-            'name':         item['enforcer__full_name'],
-            'badge_number': item['enforcer__badge_number'],
-            'ticket_count': item['ticket_count'],
-        } for item in data])
+        # Phase 3: stable-id grouping; name = latest event-time name (live
+        # name only as fallback); badge = snapshot-only, null when none.
+        snaps = latest_enforcer_snapshots([i['enforcer__id'] for i in data])
+        out = []
+        for item in data:
+            ident = grouped_enforcer_identity(item['enforcer__id'], item['enforcer__full_name'], snaps)
+            out.append({
+                'id':           item['enforcer__id'],
+                'name':         ident['name'],
+                'badge_number': ident['badge'] or None,
+                'ticket_count': item['ticket_count'],
+            })
+        return Response(out)
+
+
 class CollectionSummaryView(APIView):
     """
     Collection Summary —
     Revenue from penalties this month
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
 
     def get(self, request):
         today       = timezone.now()
@@ -161,11 +133,11 @@ class CollectionSummaryView(APIView):
         total_collected = monthly.filter(
             status='paid'
         ).aggregate(
-            total=Sum('amount_paid')
+            total=Sum('penalty_amount') 
         )['total'] or 0
 
         pending_payments = monthly.filter(
-            status__in=['pending', 'approved']
+            status__in=['pending', 'processing']
         ).aggregate(
             total=Sum('penalty_amount')
         )['total'] or 0
@@ -185,95 +157,25 @@ class CollectionSummaryView(APIView):
         })
 class GenerateReportView(APIView):
     """
-    Generate reports —
-    Daily, Monthly, By Type, Enforcer Activity
+    GET /api/reports/generate/?type=<report>&date_from=&date_to=&...
+
+    Thin HTTP wrapper — all report logic lives in reports/services/.
+    Response: {meta, summary, rows}. `meta.columns` describes the table so
+    the on-screen table and the PDF render from one definition, and
+    `meta.filters_applied` echoes exactly the filters that were applied.
+    Invalid input returns 400 with {"error": "..."} (never a silent empty).
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
 
     def get(self, request):
-        report_type = request.query_params.get('type')
-        date_from   = request.query_params.get('date_from')
-        date_to     = request.query_params.get('date_to')
+        from .services import FilterError, generate_report
+        try:
+            payload = generate_report(request.query_params.get('type', ''), request.query_params, request.user)
+        except FilterError as exc:
+            return Response({'error': str(exc)}, status=400)
+        return Response(payload)
 
-        violations = Violation.objects.all()
 
-        # Filter by date range if provided
-        if date_from:
-            violations = violations.filter(
-                created_at__date__gte=date_from
-            )
-        if date_to:
-            violations = violations.filter(
-                created_at__date__lte=date_to
-            )
-
-        if report_type == 'daily':
-            data = violations.values(
-                'created_at__date'
-            ).annotate(
-                count=Count('id'),
-                total_penalties=Sum('penalty_amount'),
-            ).order_by('created_at__date')
-
-            return Response([{
-                'date':             str(item['created_at__date']),
-                'count':            item['count'],
-                'total_penalties':  item['total_penalties'] or 0,
-            } for item in data])
-
-        elif report_type == 'monthly':
-            data = violations.values(
-                'created_at__year',
-                'created_at__month',
-            ).annotate(
-                count=Count('id'),
-                total_penalties=Sum('penalty_amount'),
-            ).order_by('created_at__year', 'created_at__month')
-
-            return Response([{
-                'year':            item['created_at__year'],
-                'month':           item['created_at__month'],
-                'count':           item['count'],
-                'total_penalties': item['total_penalties'] or 0,
-            } for item in data])
-
-        elif report_type == 'by_type':
-            data = violations.values(
-                'violation_type__name',
-                'violation_type__category',
-            ).annotate(
-                count=Count('id'),
-                total_penalties=Sum('penalty_amount'),
-            ).order_by('-count')
-
-            return Response([{
-                'violation_type':  item['violation_type__name'],
-                'category':        item['violation_type__category'],
-                'count':           item['count'],
-                'total_penalties': item['total_penalties'] or 0,
-            } for item in data])
-
-        elif report_type == 'enforcer_activity':
-            data = violations.values(
-                'enforcer__full_name',
-                'enforcer__badge_number',
-            ).annotate(
-                total_issued=Count('id'),
-                total_penalties=Sum('penalty_amount'),
-            ).order_by('-total_issued')
-
-            return Response([{
-                'enforcer':        item['enforcer__full_name'],
-                'badge_number':    item['enforcer__badge_number'],
-                'total_issued':    item['total_issued'],
-                'total_penalties': item['total_penalties'] or 0,
-            } for item in data])
-
-        return Response(
-            {'error': 'Invalid report type. Choose: daily, monthly, by_type, enforcer_activity'},
-            status=400
-        )
-    
 import openpyxl
 from openpyxl.utils import get_column_letter
 from reportlab.lib.pagesizes import letter
@@ -281,7 +183,6 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 from django.http import HttpResponse
-from violations.models import Violation
 class ExportViolationsPDFView(APIView):
     permission_classes = [IsAdminOrStaff]
 
@@ -292,20 +193,27 @@ class ExportViolationsPDFView(APIView):
         doc = SimpleDocTemplate(response, pagesize=letter)
         styles = getSampleStyleSheet()
         elements = []
-
         elements.append(Paragraph("Violations Report", styles['Title']))
 
-        violations = Violation.objects.select_related('violation_type', 'enforcer').all()
+        violations = (
+            Violation.objects
+            .prefetch_related('items__violation_type')  
+            .select_related('enforcer')
+            .all()
+        )
 
         data = [['ID', 'Violator', 'Violation Type', 'Status', 'Penalty', 'Date']]
         for v in violations:
+            vtype = ', '.join(
+                i.violation_type.name for i in v.items.all() if i.violation_type
+            ) or '—'
             data.append([
-                v.violation_id,
+                str(v.id),                                        
                 v.violator_name,
-                v.violation_type.name,
+                vtype,                                            
                 v.status,
                 str(v.penalty_amount),
-                v.date_time.strftime('%Y-%m-%d'),
+                v.date_issued.strftime('%Y-%m-%d') if v.date_issued else '—',  
             ])
 
         table = Table(data)
@@ -314,12 +222,13 @@ class ExportViolationsPDFView(APIView):
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ]))
         elements.append(table)
         doc.build(elements)
         return response
+
+
 class ExportViolationsExcelView(APIView):
     permission_classes = [IsAdminOrStaff]
 
@@ -337,79 +246,22 @@ class ExportViolationsExcelView(APIView):
         for col_num, header in enumerate(headers, 1):
             ws[f'{get_column_letter(col_num)}1'] = header
 
-        violations = Violation.objects.select_related('violation_type', 'enforcer').all()
+        violations = (
+            Violation.objects
+            .prefetch_related('items__violation_type')  
+            .select_related('enforcer')
+            .all()
+        )
         for row_num, v in enumerate(violations, 2):
-            ws[f'A{row_num}'] = v.violation_id
+            vtype = ', '.join(
+                i.violation_type.name for i in v.items.all() if i.violation_type
+            ) or '—'
+            ws[f'A{row_num}'] = str(v.id)                                         
             ws[f'B{row_num}'] = v.violator_name
-            ws[f'C{row_num}'] = v.violation_type.name
+            ws[f'C{row_num}'] = vtype                                               
             ws[f'D{row_num}'] = v.status
             ws[f'E{row_num}'] = str(v.penalty_amount)
-            ws[f'F{row_num}'] = v.date_time.strftime('%Y-%m-%d')
+            ws[f'F{row_num}'] = v.date_issued.strftime('%Y-%m-%d') if v.date_issued else '—'  
 
         wb.save(response)
         return response
-class AnalyticsView(APIView):
-    permission_classes = [IsAdminOrStaff]
-
-    def get(self, request):
-        from django.db.models import Count, Sum, Q
-        from django.db.models.functions import ExtractHour, ExtractWeekDay, TruncMonth
-        from violations.models import Violation
-        from accounts.models import CustomUser
-
-        # 1. Violations per hour of day (0-23)
-        per_hour = (
-            Violation.objects
-            .annotate(hour=ExtractHour('date_time'))
-            .values('hour')
-            .annotate(count=Count('id'))
-            .order_by('hour')
-        )
-
-        # 2. Violations per day of week (1=Sunday, 7=Saturday)
-        per_weekday = (
-            Violation.objects
-            .annotate(weekday=ExtractWeekDay('date_time'))
-            .values('weekday')
-            .annotate(count=Count('id'))
-            .order_by('weekday')
-        )
-
-        weekday_map = {
-            1: 'Sunday', 2: 'Monday', 3: 'Tuesday',
-            4: 'Wednesday', 5: 'Thursday', 6: 'Friday', 7: 'Saturday'
-        }
-
-        # 3. Most common violation type per area (location)
-        per_area = (
-            Violation.objects
-            .values('location', 'violation_type__name')
-            .annotate(count=Count('id'))
-            .order_by('location', '-count')
-        )
-
-        # 4. Collection rate
-        total      = Violation.objects.count()
-        paid_count = Violation.objects.filter(status=Violation.Status.PAID).count()
-        pending    = Violation.objects.filter(status=Violation.Status.PENDING).count()
-        collection_rate = round((paid_count / total * 100), 2) if total else 0
-
-        # 5. Enforcer performance
-        enforcer_perf = (
-            CustomUser.objects
-            .filter(role='enforcer')
-            .annotate(
-                total_violations = Count('violations_issued'),
-                paid_violations  = Count(
-                    'violations_issued',
-                    filter=Q(violations_issued__status=Violation.Status.PAID)
-                ),
-                total_collected  = Sum(
-                    'violations_issued__amount_paid',
-                    filter=Q(violations_issued__status=Violation.Status.PAID)
-                ),
-            )
-            .values('id', 'full_name', 'email',
-                    'total_violations', 'paid_violations', 'total_collected')
-            .order_by('-total_violations')
-        )

@@ -1,0 +1,54 @@
+/* ==========================================================================
+   BASE — resets + typography utilities
+   ========================================================================== */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  font: var(--text-body);
+  color: var(--color-text-primary);
+  background: var(--color-bg-app);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button, input, select, textarea { font-family: inherit; color: inherit; }
+
+a { color: inherit; text-decoration: none; }
+
+img { max-width: 100%; display: block; }
+
+/* Scrollbars — subtle, enterprise feel */
+* { scrollbar-width: thin; scrollbar-color: var(--slate-400) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--slate-400); border-radius: var(--radius-full); }
+*::-webkit-scrollbar-thumb:hover { background: var(--slate-500); }
+
+/* Focus visibility — WCAG: never remove outline without a replacement */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--blue-600);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ---- Typography utility classes ---- */
+.text-display { font: var(--text-display); color: var(--color-text-primary); letter-spacing: -0.02em; }
+.text-h1      { font: var(--text-h1);      color: var(--color-text-primary); letter-spacing: -0.01em; }
+.text-h2      { font: var(--text-h2);      color: var(--color-text-primary); }
+.text-h3      { font: var(--text-h3);      color: var(--color-text-primary); }
+.text-title   { font: var(--text-title);   color: var(--color-text-primary); }
+.text-subtitle{ font: var(--text-subtitle);color: var(--color-text-secondary); }
+.text-body    { font: var(--text-body);    color: var(--color-text-primary); }
+.text-caption { font: var(--text-caption); color: var(--color-text-secondary); }
+.text-label   { font: var(--text-label);   color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+.u-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Reduced motion respect */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}

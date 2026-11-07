@@ -1,0 +1,214 @@
+/* ==========================================================================
+   Desktop dashboards (Admin · Staff · Enforcer)
+   Layout follows the width of the page area (container queries), so it is
+   right beside the full sidebar, beside the collapsed tablet rail, and on a
+   phone. Values are tokens from styles/tokens.css.
+   ========================================================================== */
+.dash { container: dash / inline-size; display: flex; flex-direction: column; gap: var(--space-5); }
+
+/* ── Greeting ───────────────────────────────────────────────────────────── */
+.dash-greet { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+.dash-greet h1 { font: var(--text-h1); letter-spacing: -0.01em; color: var(--color-text-primary); }
+.dash-greet p { font: var(--text-subtitle); color: var(--color-text-secondary); margin-top: 2px; }
+.dash-chip {
+  display: inline-flex; align-items: center; gap: var(--space-2); padding: 8px 12px;
+  background: var(--white); border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  font: var(--text-caption); font-weight: 600; color: var(--slate-700); white-space: nowrap;
+}
+
+/* ── KPI cards ──────────────────────────────────────────────────────────── */
+.dash-kpis { display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr); }
+.dash-kpis--2, .dash-kpis--3 { grid-template-columns: minmax(0, 1fr); }
+.dash-kpis--5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@container dash (min-width: 560px) {
+  .dash-kpis--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-kpis--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container dash (min-width: 620px) { .dash-kpis--5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container dash (min-width: 960px) { .dash-kpis--5 { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+.dash-kpi {
+  display: flex; align-items: center; gap: var(--space-3); min-width: 0;
+  padding: var(--space-4); background: var(--auth-surface);
+  border: 1px solid var(--auth-border); border-radius: var(--auth-radius); box-shadow: var(--auth-shadow);
+}
+.dash-kpi-icon { width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.dash-tone-blue   { background: var(--blue-50);    color: var(--blue-600); }
+.dash-tone-orange { background: var(--warning-50); color: var(--warning-600); }
+.dash-tone-green  { background: var(--success-50); color: var(--success-600); }
+.dash-tone-purple { background: #f3e8ff;           color: #7e22ce; }
+.dash-tone-gold   { background: var(--auth-gold-soft); color: var(--auth-gold-ink); }
+.dash-tone-slate  { background: var(--slate-100);  color: var(--slate-700); }
+.dash-kpi-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dash-kpi-label { font: var(--text-caption); font-weight: 600; color: var(--slate-600); }
+.dash-kpi-value { font-size: 24px; line-height: 1.15; font-weight: 800; letter-spacing: -0.02em; color: var(--slate-950); word-break: break-word; }
+.dash-kpi-sub { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; font: var(--text-caption); font-weight: 700; }
+.dash-kpi-sub.is-up { color: var(--success-600); }
+.dash-kpi-sub.is-down { color: var(--danger-600); }
+.dash-kpi-sub-muted { color: var(--slate-500); font-weight: 500; }
+
+/* ── Panels ─────────────────────────────────────────────────────────────── */
+.dash-panel { container: panel / inline-size; display: flex; flex-direction: column; height: 100%; padding: 0; min-width: 0; }
+.dash-panel-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-5) var(--space-5) var(--space-3); }
+.dash-panel-title { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.dash-panel-icon { width: 32px; height: 32px; border-radius: var(--radius-md); flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--slate-100); color: var(--navy-700); }
+.dash-panel-title h2 { font: var(--text-h3); color: var(--color-text-primary); }
+.dash-panel-title p { font: var(--text-caption); color: var(--color-text-secondary); margin-top: 1px; }
+.dash-panel-body { flex: 1; padding: 0 var(--space-5) var(--space-5); min-width: 0; }
+.dash-panel-body.is-flush { padding: 0 0 var(--space-2); }
+.dash-link { border: none; background: none; cursor: pointer; font: var(--text-caption); font-weight: 700; color: var(--navy-600); padding: 10px 8px; min-height: 40px; border-radius: var(--radius-sm); white-space: nowrap; }
+.dash-link:hover { background: var(--slate-100); color: var(--navy-900); }
+.dash-link:focus-visible { outline: none; box-shadow: var(--auth-focus); }
+.dash-skel { display: flex; flex-direction: column; gap: 14px; padding: var(--space-2) var(--space-5) var(--space-4); }
+.dash-empty { padding: var(--space-8) var(--space-4); text-align: center; font: var(--text-caption); color: var(--slate-500); }
+
+/* ── Rows ───────────────────────────────────────────────────────────────── */
+.dash-row { display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+@container dash (min-width: 1120px) {
+  .dash-row--trio  { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.15fr) minmax(0, 1fr); }
+}
+@container dash (min-width: 960px) {
+  .dash-row--duo   { grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr); }
+}
+@container dash (min-width: 700px) and (max-width: 1119px) {
+  .dash-row--trio  { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .dash-row--trio > :first-child { grid-column: 1 / -1; }
+  .dash-stack { flex-direction: row; }
+  .dash-stack > * { flex: 1; min-width: 0; }
+}
+
+/* Right-hand column of stacked panels (staff dashboard). */
+.dash-stack { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.dash-stack > .dash-panel { height: auto; }
+
+/* ── Table ──────────────────────────────────────────────────────────────── */
+.dash-table-wrap { overflow-x: auto; position: relative; } /* position: keeps the visually-hidden header text inside the scroller */
+.dash-table { width: 100%; border-collapse: collapse; }
+.dash-table th { text-align: left; padding: 10px 14px; font: var(--text-caption); font-weight: 600; color: var(--slate-500); border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+.dash-table td { padding: 12px 14px; font: var(--text-caption); font-weight: 500; color: var(--slate-800); border-bottom: 1px solid var(--slate-100); vertical-align: middle; }
+.dash-table tbody tr:last-child td { border-bottom: none; }
+.dash-table tbody tr:hover { background: var(--slate-50); }
+.dash-table .dash-when { display: flex; flex-direction: column; gap: 1px; white-space: nowrap; }
+.dash-table .dash-when span:first-child { color: var(--slate-800); font-weight: 600; }
+.dash-table .dash-when span:last-child { color: var(--slate-500); }
+.dash-table .dash-clip { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-table .dash-act { text-align: right; width: 1%; white-space: nowrap; }
+/* Columns drop out by the width of the PANEL the table sits in. */
+@container panel (max-width: 899px) { .dash-hide-xl { display: none; } }
+@container panel (max-width: 779px) { .dash-hide-lg { display: none; } }
+@container panel (max-width: 719px) { .dash-hide-md { display: none; } }
+@container panel (max-width: 519px) { .dash-hide-sm { display: none; } }
+
+/* ── Lists (locations, legend, quick actions, recent actions) ───────────── */
+.dash-list { display: flex; flex-direction: column; }
+.dash-list > li { display: flex; align-items: center; gap: var(--space-3); padding: 11px 0; border-bottom: 1px solid var(--slate-100); min-width: 0; }
+.dash-list > li:last-child { border-bottom: none; }
+.dash-rank { width: 18px; font: var(--text-caption); font-weight: 700; color: var(--slate-500); flex-shrink: 0; }
+.dash-pin { width: 26px; height: 26px; border-radius: var(--radius-full); flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--slate-100); color: var(--navy-700); }
+.dash-grow { flex: 1; min-width: 0; }
+.dash-name { font: var(--text-body); font-size: 13px; font-weight: 500; color: var(--slate-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-sub { font: var(--text-caption); color: var(--slate-500); }
+.dash-num { font: var(--text-title); color: var(--slate-900); }
+
+.dash-donut { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
+.dash-donut-chart { position: relative; width: 150px; height: 150px; flex-shrink: 0; margin: 0 auto; }
+.dash-donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.dash-donut-center strong { font-size: 24px; font-weight: 800; color: var(--slate-950); line-height: 1.1; }
+.dash-donut-center span { font: var(--text-caption); color: var(--slate-500); }
+.dash-legend { flex: 1; min-width: 160px; }
+.dash-legend li { display: flex; align-items: center; gap: var(--space-2); padding: 6px 0; font: var(--text-caption); color: var(--slate-800); }
+.dash-legend li > span:first-child { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dash-legend .dash-grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-legend strong { color: var(--slate-900); }
+.dash-legend em { font-style: normal; color: var(--slate-500); min-width: 32px; text-align: right; }
+
+.dash-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3); }
+.dash-action {
+  display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); text-align: left;
+  background: var(--white); border: 1px solid var(--color-border); border-radius: var(--radius-lg); cursor: pointer; font-family: inherit; min-width: 0;
+  transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+}
+.dash-action:hover { border-color: var(--blue-500); background: var(--blue-50); box-shadow: var(--shadow-xs); }
+.dash-action:focus-visible { outline: 2px solid var(--blue-600); outline-offset: 2px; }
+.dash-action-icon { width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--blue-50); color: var(--blue-600); }
+.dash-action strong { display: block; font: var(--text-title); font-size: 13px; color: var(--slate-950); }
+.dash-action span:not(.dash-action-icon) { display: block; font: var(--text-caption); color: var(--slate-500); }
+.dash-actions--stack { grid-template-columns: minmax(0, 1fr); }
+
+.dash-tooltip { padding: 8px 12px; box-shadow: var(--shadow-md); }
+.dash-tooltip-title { font: var(--text-title); margin-bottom: 4px; }
+.dash-tooltip-row { display: flex; align-items: center; gap: 6px; font: var(--text-caption); }
+.dash-tooltip-row > span { width: 7px; height: 7px; border-radius: 50%; }
+.dash-legend-inline { display: flex; gap: var(--space-4); font: var(--text-caption); color: var(--slate-600); }
+.dash-legend-inline span { display: inline-flex; align-items: center; gap: 6px; }
+.dash-legend-inline i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+@container dash (max-width: 519px) {
+  .dash-greet h1 { font-size: 21px; }
+  .dash-kpi { flex-direction: column; align-items: flex-start; gap: var(--space-3); padding: var(--space-4); }
+  .dash-kpis--5 > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .dash-panel-head { padding: var(--space-4) var(--space-4) var(--space-3); }
+  .dash-panel-body { padding: 0 var(--space-4) var(--space-4); }
+}
+
+.dash-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* ==========================================================================
+   Authenticated redesign layer
+   ========================================================================== */
+
+/* Panels: same radius/border/shadow language as KPI cards. Informational
+   only — no hover lift (these are not buttons). */
+.dash-panel { border: 1px solid var(--auth-border); border-radius: var(--auth-radius); box-shadow: var(--auth-shadow); background: var(--auth-surface); }
+
+/* Primary action inside a dashboard = TMEO gold with navy text. Scoped to
+   .dash so buttons in every other module keep their existing look. */
+.dash .btn-primary { background: var(--auth-gold); color: var(--auth-on-gold); border-color: var(--auth-gold); font-weight: 700; }
+.dash .btn-primary:hover:not(:disabled) { background: var(--auth-gold-hover); border-color: var(--auth-gold-hover); }
+.dash .btn:focus-visible { outline: none; box-shadow: var(--auth-focus); }
+.dash-greet .btn { min-height: 44px; }
+
+/* Record cards: the narrow-width form of a table. Same rows, same data —
+   only the presentation changes (no scaled-down tables). */
+.dash-cards { display: none; flex-direction: column; }
+.dash-card-row { display: flex; align-items: center; gap: var(--space-3); padding: 12px var(--space-4); border-bottom: 1px solid var(--slate-100); min-width: 0; }
+.dash-card-row:last-child { border-bottom: none; }
+.dash-card-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.dash-card-title { font: var(--text-title); color: var(--slate-950); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font: var(--text-caption); color: var(--slate-500); min-width: 0; }
+.dash-card-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+.dash-card-side .btn { min-height: 40px; min-width: 76px; }
+@container panel (max-width: 519px) {
+  .dash-table-wrap { display: none; }
+  .dash-cards { display: flex; }
+}
+
+/* ── Entrance: one short, quiet settle (≈550ms total). Opacity + small
+   translate, no bounce. KPIs stagger; the rest of the page follows. ───── */
+@keyframes dash-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.dash > :not(.dash-kpis) { animation: dash-rise 300ms var(--ease) both; }
+.dash > :nth-child(1) { animation-delay: 0ms; }
+.dash > :nth-child(n+3) { animation-delay: 220ms; }
+.dash > :nth-child(n+4) { animation-delay: 290ms; }
+.dash > :nth-child(n+5) { animation-delay: 350ms; }
+.dash-kpis > * { animation: dash-rise 280ms var(--ease) both; }
+.dash-kpis > :nth-child(1) { animation-delay: 80ms; }
+.dash-kpis > :nth-child(2) { animation-delay: 130ms; }
+.dash-kpis > :nth-child(3) { animation-delay: 180ms; }
+.dash-kpis > :nth-child(4) { animation-delay: 230ms; }
+.dash-kpis > :nth-child(5) { animation-delay: 280ms; }
+@media (prefers-reduced-motion: reduce) {
+  .dash > *, .dash-kpis > * { animation: none !important; }
+}
+
+/* Narrow widths: keep the work (the queue) on screen. Three-KPI rows sit side
+   by side in compact form instead of stacking into three tall cards. */
+@container dash (max-width: 519px) {
+  .dash-kpis--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-kpis--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+  .dash-kpis--3 .dash-kpi { padding: 12px 10px; gap: var(--space-2); }
+  .dash-kpis--3 .dash-kpi-icon { width: 32px; height: 32px; border-radius: 10px; }
+  .dash-kpis--3 .dash-kpi-label { font-size: 11px; line-height: 1.25; }
+  .dash-kpis--3 .dash-kpi-value { font-size: 22px; }
+  .dash-kpis--3 .dash-kpi-sub { display: none; }
+}

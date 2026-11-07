@@ -37,8 +37,9 @@ def send_fcm_notification(token, title, body, data=None):
             token=token,
         )
         messaging.send(message)
-    except Exception:
-        pass  # Never block main flow for notification failures
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning('FCM notification failed: %s', exc) # Never block main flow for notification failures
 
 
 # Deployment 
@@ -97,10 +98,27 @@ Time       : {now}
 # Geofence 
 
 def send_geofence_alert(enforcer, current_lat, current_lon,
-                        assigned_lat, assigned_lon, distance_meters):
-    now          = timezone.now().strftime("%B %d, %Y %I:%M %p")
+                        center_lat, center_lon, distance_meters,
+                        radius_meters=None, scheduled_area=None):
+    """
+    Admin alert (email + FCM) for an on-duty enforcer whose reported position
+    is farther than the configured radius from the Lucena City centre.
+
+    What is actually checked: distance from the Lucena City centre. It is NOT
+    a test against the scheduled/assigned area's boundary, so the message never
+    says the enforcer left an "assigned" or "designated" area.
+    `scheduled_area` (today's EnforcerSchedule.assigned_area) is shown only as
+    informational context and is clearly labelled as not checked.
+    """
+    now          = timezone.localtime().strftime("%B %d, %Y %I:%M %p")
     admins       = CustomUser.objects.filter(role='admin', is_active=True)
     admin_emails = list(admins.values_list('email', flat=True))
+
+    radius_txt = f'{radius_meters:.0f} m' if radius_meters else 'the configured radius'
+    area_line  = (
+        f'\nScheduled Area (informational only, boundary not checked): {scheduled_area}'
+        if scheduled_area else ''
+    )
 
     # Email → all admins
     if admin_emails:
@@ -113,13 +131,12 @@ Badge No. : {enforcer.badge_number or "N/A"}
 ID Number : {enforcer.id_number}
 Time      : {now}
 
-The enforcer has moved outside their designated area.
+The enforcer's reported location is outside the configured Lucena City center geofence ({radius_txt} radius).
 
-Current Location  : {current_lat:.6f}, {current_lon:.6f}
-Assigned Area     : {enforcer.assigned_area or "Not set"}
-Distance from Area: {distance_meters:.0f} meters
+Current Location            : {current_lat:.6f}, {current_lon:.6f}
+Distance from Lucena center : {distance_meters:.0f} meters{area_line}
 
-Please verify the enforcer's location immediately.
+Please verify the enforcer's location.
 
 — Traffic Enforcement and Violation Management System, Lucena City''',
             from_email    = settings.DEFAULT_FROM_EMAIL,
@@ -133,8 +150,8 @@ Please verify the enforcer's location immediately.
             token = getattr(admin, 'fcm_token', None),
             title = '⚠️ Geofence Alert',
             body  = (
-                f'{enforcer.full_name} is {distance_meters:.0f}m '
-                f'outside their assigned area.'
+                f'{enforcer.full_name} is {distance_meters:.0f}m from Lucena City '
+                f'center, outside the {radius_txt} geofence.'
             ),
             data  = {
                 'type':             'geofence',
@@ -150,19 +167,16 @@ Please verify the enforcer's location immediately.
 
 def send_violation_notification(violation):
     """
-    FCM push to enforcer when their violation is approved or paid.
-    Call this from ViolationViewSet approve/mark_paid actions.
+    FCM push to enforcer when their violation is marked as paid.
+    Call this from ViolationViewSet mark_paid action.
     """
     enforcer = violation.enforcer
     if not enforcer:
         return
 
-    if violation.status == 'approved':
-        title = 'Violation Approved ✅'
-        body  = f'Violation {violation.violation_id} has been approved.'
-    elif violation.status == 'paid':
+    if violation.status == 'paid':
         title = 'Violation Paid 💰'
-        body  = f'Violation {violation.violation_id} has been marked as paid.'
+        body  = f'Violation #{violation.id} has been marked as paid.'
     else:
         return
 
@@ -172,7 +186,7 @@ def send_violation_notification(violation):
         body  = body,
         data  = {
             'type':         'violation_update',
-            'violation_id': violation.violation_id,
+            'violation_id': str(violation.id),
             'status':       violation.status,
         },
     )

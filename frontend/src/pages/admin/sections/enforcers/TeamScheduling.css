@@ -1,0 +1,104 @@
+/* ── Enforcers / Team Scheduling segmented toggle ── */
+.seg-toggle {
+  display: inline-flex; gap: 2px; padding: 3px; background: var(--slate-100);
+  border-radius: var(--radius-lg);
+}
+.seg-toggle-btn {
+  display: flex; align-items: center; gap: 6px; padding: 7px 16px; border: none; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--slate-500); background: transparent;
+  border-radius: var(--radius-md); transition: background var(--transition-fast), color var(--transition-fast);
+  white-space: nowrap;
+}
+.seg-toggle-btn:hover:not(.is-active) { color: var(--slate-800); }
+.seg-toggle-btn.is-active { background: var(--white); color: var(--navy-800); box-shadow: var(--shadow-sm); }
+
+/* ── Toolbar: date nav ── */
+.tsched-toolbar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
+  margin-bottom: 16px;
+}
+.tsched-toolbar-nav { display: flex; align-items: center; gap: 8px; }
+.tsched-toolbar-title { font-size: 15px; font-weight: 700; color: var(--slate-950); min-width: 160px; text-align: center; }
+
+/* ── Team Scheduling split layout ── */
+.team-sched {
+  display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; align-items: start;
+  margin-bottom: 16px;
+}
+.team-sched-main { min-width: 0; }
+.team-sched-roster { max-height: none; }
+
+@media (max-width: 900px) {
+  .team-sched { grid-template-columns: 1fr; }
+  .tsched-toolbar-title { min-width: 0; }
+}
+
+/* ── Roster (Enforcers directory) rows ── */
+.tsched-roster-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 8px; border-radius: var(--radius-md);
+  cursor: pointer; border: 1px solid transparent; transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.tsched-roster-row:hover { background: var(--slate-50); }
+.tsched-roster-row.is-selected { background: var(--blue-50); border-color: var(--blue-100); }
+
+/* ── Scheduled Shift Details card ── */
+.tsched-details-card { margin-top: 4px; }
+.tsched-details-header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.tsched-details-grid {
+  display: grid;
+  grid-template-columns: auto auto minmax(180px, 1fr) minmax(200px, 1.2fr);
+  gap: 16px 20px;
+}
+.tsched-details-notes { grid-column: 1 / -1; }
+.tsched-details-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tsched-details-field textarea.input { resize: vertical; min-height: 38px; font-family: var(--font-family); }
+.tsched-date-pill {
+  display: flex; align-items: center; gap: 6px; padding: 9px 12px; background: var(--slate-50);
+  border: 1.5px solid var(--color-border); border-radius: var(--radius-md); font-size: 13px; font-weight: 700;
+  color: var(--slate-950); white-space: nowrap;
+}
+.tsched-fixed-shift-value {
+  display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  padding: 9px 12px; background: var(--slate-50); border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md); font-size: 13px; font-weight: 700; color: var(--slate-950);
+  box-sizing: border-box; white-space: nowrap;
+}
+.tsched-fixed-shift-sub { font-size: 11px; font-weight: 500; color: var(--slate-500); }
+.tsched-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.tsched-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; background: var(--blue-50);
+  border: 1px solid var(--blue-100); border-radius: var(--radius-full); font-size: 12px; font-weight: 600; color: var(--slate-900);
+}
+.tsched-chip button {
+  display: flex; align-items: center; justify-content: center; border: none; background: none; cursor: pointer;
+  color: var(--slate-500); padding: 2px; border-radius: 50%;
+}
+.tsched-chip button:hover { background: var(--slate-200); color: var(--slate-800); }
+
+.tsched-details-footer {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-top: 16px;
+  padding-top: 14px; border-top: 1px solid var(--color-border); flex-wrap: wrap;
+}
+.tsched-existing-entries { display: flex; flex-direction: column; gap: 6px; }
+.tsched-existing-entry {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px;
+  background: var(--slate-50); border-radius: var(--radius-md); border: 1px solid var(--color-border);
+  font-size: 12.5px; color: var(--slate-700);
+}
+
+@media (max-width: 900px) {
+  .tsched-details-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) {
+  .tsched-details-grid { grid-template-columns: 1fr; }
+  .tsched-details-footer { flex-direction: column; align-items: stretch; }
+}
+
+/* ── Multi-date summary (inside Scheduled Shift Details) ── */
+.tsched-apply-note { margin: -6px 0 12px; }
+.tsched-details-dates--list { grid-column: 1 / -1; }
+.tsched-date-chips { max-height: 96px; overflow-y: auto; }
+.tsched-chip--date { padding: 4px 6px 4px 10px; }
+.tsched-fade { animation: tsched-fade 160ms ease-out; }
+@keyframes tsched-fade { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tsched-fade { animation: none; } }

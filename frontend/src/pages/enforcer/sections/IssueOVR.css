@@ -1,0 +1,253 @@
+/* ==========================================================================
+   ISSUE OVR — three-step wizard (enforcer)
+   Layout responds to the width of the page area itself (container queries),
+   not the viewport, so it behaves the same beside the desktop sidebar, on a
+   collapsed tablet rail, and inside the phone shell.
+     Full-width single column at every width (no side panel).
+     < 560px  phone spacing, stacked buttons, labels under the step dots
+   Every colour, radius and space value is a token from styles/tokens.css.
+   ========================================================================== */
+
+.ovr-page {
+  container: ovr / inline-size;
+  max-width: 1120px;
+  margin: 0 auto;
+  width: 100%;
+  scroll-margin-top: 72px;
+}
+.is-hidden { display: none !important; }
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.ovr-header { display: flex; align-items: flex-start; gap: var(--space-3); margin-bottom: var(--space-5); }
+.ovr-back {
+  width: 40px; height: 40px; flex-shrink: 0; border-radius: var(--radius-full);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--white); border: 1px solid var(--color-border); color: var(--slate-800); cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.ovr-back:hover { background: var(--slate-50); border-color: var(--slate-400); }
+.ovr-title { font: var(--text-h1); letter-spacing: -0.01em; color: var(--color-text-primary); }
+.ovr-subtitle { font: var(--text-subtitle); color: var(--color-text-secondary); margin-top: 2px; }
+
+/* ── Stepper ────────────────────────────────────────────────────────────── */
+.ovr-stepper { list-style: none; display: flex; align-items: flex-start; margin-bottom: var(--space-5); }
+.ovr-step { display: flex; align-items: flex-start; flex: 1 1 0; min-width: 0; }
+.ovr-step:last-child { flex: 0 0 auto; }
+.ovr-step:not(:last-child)::after {
+  content: ''; flex: 1; height: 2px; margin: 13px var(--space-3) 0;
+  background: var(--color-border); border-radius: 2px;
+}
+.ovr-step--done:not(:last-child)::after { background: var(--blue-600); }
+
+.ovr-step-btn {
+  display: flex; align-items: center; gap: var(--space-2);
+  background: none; border: none; padding: 0; font-family: inherit; cursor: default;
+}
+.ovr-step--done .ovr-step-btn { cursor: pointer; }
+.ovr-step-dot {
+  width: 28px; height: 28px; border-radius: var(--radius-full); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font: var(--text-caption); font-weight: 700;
+  background: var(--white); color: var(--slate-500); border: 1.5px solid var(--slate-400);
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+.ovr-step--active .ovr-step-dot { background: var(--blue-600); border-color: var(--blue-600); color: var(--white); box-shadow: 0 0 0 4px var(--blue-100); }
+.ovr-step--done .ovr-step-dot { background: var(--blue-600); border-color: var(--blue-600); color: var(--white); }
+.ovr-step-label { font: var(--text-title); color: var(--slate-500); white-space: nowrap; }
+.ovr-step--active .ovr-step-label { color: var(--blue-700); }
+.ovr-step--done .ovr-step-label { color: var(--slate-800); }
+
+/* ── Page grid ──────────────────────────────────────────────────────────── */
+.ovr-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+
+/* ── Cards ──────────────────────────────────────────────────────────────── */
+.ovr-card { margin-bottom: var(--space-4); }
+.ovr-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
+.ovr-card-title { font: var(--text-h3); color: var(--color-text-primary); }
+.ovr-card-sub { font: var(--text-caption); color: var(--color-text-secondary); margin-top: 2px; }
+.ovr-stack { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.ovr-grid { display: grid; gap: var(--space-4); }
+.ovr-grid--2 { grid-template-columns: 1fr 1fr; }
+.ovr-grid--3 { grid-template-columns: 1fr 1fr 1fr; }
+.ovr-grid--name { grid-template-columns: 1.4fr 1.4fr 76px; }
+
+.ovr-plate { font-weight: 700; letter-spacing: 0.12em; }
+.ovr-ovrno { font-size: 18px; font-weight: 700; letter-spacing: 0.06em; }
+
+.ovr-inline-error { color: var(--danger-600); font: var(--text-caption); font-weight: 600; }
+.ovr-inline-note { font: var(--text-caption); color: var(--slate-600); margin-bottom: var(--space-3); }
+.ovr-icon-btn {
+  width: 32px; height: 32px; border-radius: var(--radius-full); border: none; background: transparent;
+  color: var(--slate-600); display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.ovr-icon-btn:hover { background: var(--slate-100); }
+
+/* ── Segmented radio (Private/Public, license status) ───────────────────── */
+.ovr-seg { display: inline-flex; align-self: flex-start; gap: 2px; padding: 3px; background: var(--slate-100); border-radius: var(--radius-md); }
+.ovr-seg-item {
+  position: relative; padding: 9px 16px; min-height: 40px; display: flex; align-items: center;
+  border-radius: var(--radius-sm); cursor: pointer; font: var(--text-title); color: var(--slate-600);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.ovr-seg-item input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.ovr-seg-item.is-selected { background: var(--white); color: var(--blue-700); box-shadow: var(--shadow-xs); }
+.ovr-seg-item:has(input:focus-visible) { outline: 2px solid var(--blue-600); outline-offset: 2px; }
+
+/* ── Driver Information header actions (Scan license / Upload Photo) ───── */
+.ovr-head-actions { display: flex; gap: var(--space-2); flex-shrink: 0; }
+
+/* ── Confiscated-license summary (rendered only while Confiscated) ──────── */
+.ovr-confiscated {
+  display: flex; flex-direction: column; gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--warning-50); border: 1px solid var(--warning-100); border-radius: var(--radius-lg);
+}
+.ovr-confiscated-title { font: var(--text-title); color: var(--warning-700); }
+.ovr-confiscated-row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-4); }
+.ovr-confiscated-label { font: var(--text-caption); color: var(--slate-600); flex-shrink: 0; }
+.ovr-confiscated-value { font: var(--text-body); font-weight: 600; color: var(--slate-950); text-align: right; overflow-wrap: anywhere; }
+.ovr-confiscated-missing { font: var(--text-caption); font-weight: 600; color: var(--warning-700); text-align: right; }
+.ovr-confiscated-note { font: var(--text-caption); color: var(--slate-600); }
+
+/* Subtle reveal: opacity 0 → 1, translateY 4px → 0, ~180ms. */
+.ovr-reveal { animation: ovr-reveal 180ms var(--ease) both; }
+@keyframes ovr-reveal { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ovr-reveal { animation: none; } }
+
+/* ── License scanner ────────────────────────────────────────────────────── */
+.ovr-scan {
+  display: flex; flex-direction: column; gap: var(--space-3);
+  padding: var(--space-4); margin-bottom: var(--space-4);
+  background: var(--slate-50); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+}
+.ovr-scan-head { display: flex; align-items: center; justify-content: space-between; }
+.ovr-scan-title { display: inline-flex; align-items: center; gap: 6px; font: var(--text-title); color: var(--slate-800); }
+.ovr-viewfinder {
+  position: relative; aspect-ratio: 16 / 9; overflow: hidden;
+  background: var(--navy-950); border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
+}
+.ovr-viewfinder video { width: 100%; height: 100%; object-fit: cover; }
+.ovr-viewfinder-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--slate-500); font: var(--text-caption); }
+.ovr-viewfinder-corners { position: absolute; inset: 14% 10%; border: 2px dashed rgba(255, 255, 255, 0.5); border-radius: var(--radius-md); pointer-events: none; }
+.ovr-scan-shot { width: 100%; max-height: 240px; object-fit: cover; border-radius: var(--radius-md); }
+.ovr-scan-actions { display: flex; gap: var(--space-2); }
+
+.ovr-detected {
+  display: flex; flex-direction: column; gap: var(--space-3);
+  padding: var(--space-4); background: var(--success-50);
+  border: 1px solid var(--success-100); border-radius: var(--radius-lg);
+}
+.ovr-detected-title { display: flex; gap: var(--space-3); align-items: flex-start; color: var(--success-700); }
+.ovr-detected-title strong { display: block; font: var(--text-title); }
+.ovr-detected-title span { display: block; font: var(--text-caption); }
+.ovr-detected-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.ovr-detected-list > div { display: flex; justify-content: space-between; gap: var(--space-4); }
+.ovr-detected-list dt { font: var(--text-caption); color: var(--slate-600); flex-shrink: 0; }
+.ovr-detected-list dd { font: var(--text-body); font-weight: 600; color: var(--slate-950); text-align: right; }
+
+/* ── Violation picker ───────────────────────────────────────────────────── */
+.ovr-search { position: relative; margin-bottom: var(--space-3); }
+.ovr-search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--slate-500); pointer-events: none; }
+.ovr-search .input { padding-left: 36px; }
+
+.ovr-vlist { max-height: 420px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--white); }
+.ovr-vlist-group {
+  position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between;
+  padding: 7px var(--space-4); background: var(--slate-50); border-bottom: 1px solid var(--color-border);
+  font: var(--text-label); color: var(--slate-600);
+}
+.ovr-vlist-empty { display: flex; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-8) var(--space-4); text-align: center; font: var(--text-caption); color: var(--slate-500); }
+
+.ovr-vrow {
+  position: relative; display: flex; align-items: center; gap: var(--space-3);
+  min-height: 56px; padding: var(--space-3) var(--space-4); cursor: pointer;
+  border-bottom: 1px solid var(--slate-100); transition: background var(--transition-fast);
+}
+.ovr-vrow:last-child { border-bottom: none; }
+.ovr-vrow:hover { background: var(--slate-50); }
+.ovr-vrow.is-checked { background: var(--blue-50); }
+.ovr-vrow input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.ovr-vrow:has(input:focus-visible) { outline: 2px solid var(--blue-600); outline-offset: -2px; }
+.ovr-vrow-box {
+  width: 20px; height: 20px; flex-shrink: 0; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--slate-400); background: var(--white); color: var(--white);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.ovr-vrow-box svg { opacity: 0; }
+.ovr-vrow.is-checked .ovr-vrow-box { background: var(--blue-600); border-color: var(--blue-600); }
+.ovr-vrow.is-checked .ovr-vrow-box svg { opacity: 1; }
+.ovr-vrow-text { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.ovr-vrow-name { font: var(--text-body); font-weight: 500; color: var(--slate-950); }
+.ovr-vrow.is-checked .ovr-vrow-name { font-weight: 600; }
+.ovr-vrow-code { font: var(--text-caption); color: var(--slate-500); }
+.ovr-vrow-fine { font: var(--text-title); color: var(--slate-800); white-space: nowrap; }
+.ovr-vrow.is-checked .ovr-vrow-fine { color: var(--blue-700); }
+
+.ovr-total {
+  display: flex; align-items: center; justify-content: space-between; margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg);
+  background: var(--navy-800); color: var(--slate-400); font: var(--text-subtitle);
+}
+.ovr-total strong { font-size: 20px; font-weight: 800; color: var(--warning-500); }
+
+.ovr-affix { position: relative; }
+.ovr-affix svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--slate-500); pointer-events: none; }
+.ovr-affix .input { padding-left: 36px; background: var(--slate-50); color: var(--slate-700); cursor: default; }
+
+.ovr-edit {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: none; border-radius: var(--radius-sm);
+  background: none; color: var(--blue-600); font: var(--text-caption); font-weight: 700; cursor: pointer;
+}
+.ovr-edit:hover { background: var(--blue-50); }
+
+/* ── Actions ────────────────────────────────────────────────────────────── */
+.ovr-actions { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); margin-top: var(--space-2); }
+
+/* ── Success ────────────────────────────────────────────────────────────── */
+.ovr-success { display: flex; flex-direction: column; align-items: center; text-align: center; max-width: 440px; margin: var(--space-6) auto var(--space-8); }
+.ovr-success-badge {
+  width: 80px; height: 80px; border-radius: var(--radius-full); margin-bottom: var(--space-5);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--success-50); color: var(--success-600); box-shadow: 0 0 0 10px rgba(22, 163, 74, 0.08);
+}
+.ovr-success-badge.is-offline { background: var(--warning-50); color: var(--warning-600); box-shadow: 0 0 0 10px rgba(217, 119, 6, 0.08); }
+.ovr-success-check { stroke-dasharray: 40; stroke-dashoffset: 40; animation: ovr-check-draw 0.5s 0.15s var(--ease) forwards; }
+@keyframes ovr-check-draw { to { stroke-dashoffset: 0; } }
+.ovr-success h2 { font: var(--text-h2); color: var(--color-text-primary); }
+.ovr-success-sub { font: var(--text-subtitle); color: var(--color-text-secondary); margin-top: var(--space-2); max-width: 340px; }
+.ovr-success-card { width: 100%; margin-top: var(--space-6); text-align: left; }
+.ovr-success-number { margin: 2px 0 var(--space-4); font-size: 26px; font-weight: 800; letter-spacing: 0.02em; color: var(--blue-700); word-break: break-all; }
+.ovr-success-rows { border-top: 1px solid var(--color-border); }
+.ovr-success-rows > div { display: flex; justify-content: space-between; gap: var(--space-4); padding: var(--space-2) 0; border-bottom: 1px solid var(--slate-100); }
+.ovr-success-rows > div:last-child { border-bottom: none; }
+.ovr-success-rows dt { font: var(--text-caption); color: var(--slate-500); flex-shrink: 0; }
+.ovr-success-rows dd { font: var(--text-body); font-weight: 600; text-align: right; }
+.ovr-success-actions { width: 100%; display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-5); }
+
+/* ── Phone-width page area ──────────────────────────────────────────────── */
+@container ovr (max-width: 559px) {
+  .ovr-title { display: none; }
+  .ovr-header { align-items: center; margin-bottom: var(--space-4); }
+  .ovr-card.card-padded { padding: var(--space-4); }
+
+  .ovr-step-btn { flex-direction: column; gap: 6px; }
+  .ovr-step-label { font: var(--text-caption); font-weight: 600; }
+
+  .ovr-grid--2, .ovr-grid--3 { grid-template-columns: 1fr; }
+  .ovr-grid--name { grid-template-columns: 1fr 76px; }
+  .ovr-grid--name > :first-child { grid-column: 1 / -1; }
+
+  .ovr-card-head { flex-direction: column; }
+  .ovr-actions { flex-direction: column-reverse; align-items: stretch; }
+  .ovr-actions .btn { width: 100%; min-height: 48px; }
+  .ovr-seg { align-self: stretch; }
+  .ovr-seg-item { flex: 1; justify-content: center; }
+
+  .ovr-head-actions { width: 100%; }
+  .ovr-head-actions .btn { flex: 1; min-height: 44px; justify-content: center; }
+  .ovr-confiscated-row { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .ovr-confiscated-value, .ovr-confiscated-missing { text-align: left; }
+}

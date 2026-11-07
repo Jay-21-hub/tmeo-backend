@@ -1,0 +1,19 @@
+.topbar {
+  background: transparent;
+  height: 52px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 var(--space-6);
+  flex-shrink: 0; gap: var(--space-3);
+}
+@media (max-width: 639px) { .topbar { padding: 0 var(--space-4); } }
+
+.topbar-icon-btn {
+  min-width: 40px; min-height: 40px;
+  background: none; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  cursor: pointer; padding: 7px; display: flex; align-items: center; justify-content: center;
+  color: var(--slate-500); flex-shrink: 0; transition: background var(--transition-fast), color var(--transition-fast);
+}
+.topbar-icon-btn:hover { background: var(--slate-50); color: var(--slate-800); }
+
+.topbar .notif-bell-btn:focus-visible, .topbar-icon-btn:focus-visible { outline: none; box-shadow: var(--auth-focus); }
+.topbar .notif-bell-btn { width: 40px; height: 40px; }

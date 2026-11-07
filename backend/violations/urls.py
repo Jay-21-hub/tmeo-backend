@@ -1,21 +1,61 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from . import views
-
-router = DefaultRouter()
-router.register('records', views.ViolationViewSet,     basename='violations')
-router.register('types',   views.ViolationTypeViewSet, basename='violation-types')
-router.register('tickets', views.DigitalTicketViewSet, basename='tickets')
+from django.urls import path
+from .views import (
+    ViolationTypeListView, ViolationTypeDetailView,
+    VehicleBrandModelListView, VehicleBrandModelDetailView,
+    ViolationCreateView,
+    ViolationListView, ViolationDetailView,
+    PublicViolationListView, PublicViolationStatsView, PublicViolationTypeHighlightsView,
+    AssessmentView, GenerateTicketView, ConfirmPaymentView,
+    AssessmentDetailView, EvidenceListCreateView, EvidenceAssociateView,
+    ViolationStatsView, AnalyticsSummaryView,
+    StaffDashboardView, PendingViolationListView,
+    YearComparisonView, ImportViolationsView, ImportTemplateView,
+    MarkTicketPrintedView, ScanLicenseView, ViolatorLookupView,
+    ViolatorHistoryFullView, RelatedActiveViolationsView,
+)
+from .views_sse import ViolationSSEView
+from .custody_views import (
+    CustodyListView, CustodySummaryView, CustodyDetailView, CustodyTimelineView,
+    CustodyHistoryView, MarkReadyView, ReleaseView, VerifyDocumentTypeView, CorrectView,
+)
 
 urlpatterns = [
-    path('', include(router.urls)),
-
-    # OCR
-    path('scan-license/', views.OCRScanView.as_view(), name='scan_license'),
-
-    # Void
-    path('records/<int:pk>/void/', views.VoidViolationView.as_view(), name='violation_void'),
-
-    # Dashboard stats
-    path('dashboard-stats/', views.ViolationDashboardStatsView.as_view(), name='violation_stats'),
+    path('types/',                         ViolationTypeListView.as_view(),    name='violation-types'),
+    path('types/<int:pk>/',                ViolationTypeDetailView.as_view(),  name='violation-type-detail'),
+    path('vehicle-brands/',                VehicleBrandModelListView.as_view(),   name='vehicle-brands'),
+    path('vehicle-brands/<int:pk>/',       VehicleBrandModelDetailView.as_view(), name='vehicle-brand-detail'),
+    path('create/',                        ViolationCreateView.as_view(),      name='violation-create'),
+    path('public/',                        PublicViolationListView.as_view(),  name='violation-public-list'),
+    path('public/stats/',                  PublicViolationStatsView.as_view(), name='violation-public-stats'),
+    path('public/types/',                  PublicViolationTypeHighlightsView.as_view(), name='violation-public-types'),
+    path('evidence/',                      EvidenceListCreateView.as_view(),   name='evidence-list-create'),
+    path('evidence/<int:pk>/',             EvidenceAssociateView.as_view(),    name='evidence-associate'),
+    path('',                               ViolationListView.as_view(),        name='violation-list'),
+    path('<int:pk>/',                      ViolationDetailView.as_view(),      name='violation-detail'),
+    path('<int:pk>/assess/',               AssessmentView.as_view(),           name='violation-assess'),
+    path('<int:pk>/related/',              RelatedActiveViolationsView.as_view(), name='violation-related-active'),
+    path('<int:pk>/confirm-payment/',      ConfirmPaymentView.as_view(),       name='violation-confirm-payment'),
+    path('<int:pk>/assessment/',           AssessmentDetailView.as_view(),     name='violation-assessment-record'),
+    path('<int:pk>/generate-ticket/',      GenerateTicketView.as_view(),       name='violation-generate-ticket'),
+    path('stats/',                         ViolationStatsView.as_view(),       name='violation-stats'),
+    path('analytics/',                     AnalyticsSummaryView.as_view(),     name='violation-analytics'),
+    path('analytics/year_comparison/',     YearComparisonView.as_view(),       name='violation-analytics-year'),
+    path('staff-dashboard/',               StaffDashboardView.as_view(),       name='staff-dashboard'),
+    path('pending/',                       PendingViolationListView.as_view(), name='pending-violations'),
+    path('sse/',                           ViolationSSEView.as_view(),         name='violation-sse'),
+    path('import/',                        ImportViolationsView.as_view(),     name='violation-import'),
+    path('import/template/',               ImportTemplateView.as_view(),       name='violation-import-template'),
+    path('tickets/<int:pk>/mark-printed/', MarkTicketPrintedView.as_view(),   name='violation-mark-printed'),
+    path('scan-license/',                  ScanLicenseView.as_view(),          name='violation-scan-license'),
+    path('violator-lookup/',               ViolatorLookupView.as_view(),       name='violator-lookup'),
+    path('confiscated-licenses/',                              CustodyListView.as_view(),          name='custody-list'),
+    path('confiscated-licenses/summary/',                      CustodySummaryView.as_view(),       name='custody-summary'),
+    path('confiscated-licenses/history/',                      CustodyHistoryView.as_view(),       name='custody-history'),
+    path('confiscated-licenses/<str:key>/',                    CustodyDetailView.as_view(),        name='custody-detail'),
+    path('confiscated-licenses/<str:key>/timeline/',           CustodyTimelineView.as_view(),      name='custody-timeline'),
+    path('confiscated-licenses/<str:key>/mark-ready/',         MarkReadyView.as_view(),            name='custody-mark-ready'),
+    path('confiscated-licenses/<str:key>/release/',            ReleaseView.as_view(),              name='custody-release'),
+    path('confiscated-licenses/<str:key>/verify-document-type/', VerifyDocumentTypeView.as_view(), name='custody-verify'),
+    path('confiscated-licenses/<str:key>/correct/',            CorrectView.as_view(),              name='custody-correct'),
+    path('violator-history-full/',         ViolatorHistoryFullView.as_view(),  name='violator-history-full'),
 ]
