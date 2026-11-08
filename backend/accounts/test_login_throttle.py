@@ -32,7 +32,7 @@ class LoginThrottleScope(APITestCase):
         self.assertNotEqual(login_key, anon_key)
         self.assertIn('login', login_key)
 
-    def test_sixth_login_attempt_in_a_minute_is_throttled(self):
+    def test_same_account_is_throttled_after_ten_attempts(self):
         CustomUser.objects.create_user(
             email='thr@tmeo.test', password='TmeoTest!2026',
             full_name='Thr', id_number='THR-1', role='staff',
@@ -40,7 +40,16 @@ class LoginThrottleScope(APITestCase):
         codes = [
             self.client.post('/api/auth/login/', {'id_number': 'THR-1', 'password': 'wrong'},
                              format='json', REMOTE_ADDR='203.0.113.8').status_code
-            for _ in range(6)
+            for _ in range(11)
         ]
-        self.assertEqual(codes[:5], [400] * 5)
-        self.assertEqual(codes[5], 429)
+        self.assertEqual(codes[:10], [400] * 10)
+        self.assertEqual(codes[10], 429)
+
+    def test_many_different_users_on_one_ip_are_not_throttled(self):
+        # Simulates a whole classroom behind one school WiFi (one IP).
+        codes = [
+            self.client.post('/api/auth/login/', {'id_number': f'CLASS-{i}', 'password': 'wrong'},
+                             format='json', REMOTE_ADDR='203.0.113.9').status_code
+            for i in range(30)
+        ]
+        self.assertNotIn(429, codes)

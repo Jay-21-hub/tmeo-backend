@@ -3,10 +3,21 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 
 class LoginThrottle(AnonRateThrottle):
-    # Own scope => own counter. Previously this inherited scope 'anon' and shared its
-    # bucket with every public-page request from the same IP.
+    # Per-IP, generous: many users can share one school/office WiFi.
     scope = 'login'
-    rate = '5/minute'
+    rate = '300/minute'
+
+
+class LoginAccountThrottle(AnonRateThrottle):
+    # Per-account, strict: keeps brute-force protection on a single username.
+    scope = 'login_account'
+    rate = '10/minute'
+
+    def get_cache_key(self, request, view):
+        ident = str(request.data.get('id_number') or '').strip().lower()
+        if not ident:
+            return None
+        return self.cache_format % {'scope': self.scope, 'ident': ident}
 
 
 class ForgotPasswordThrottle(AnonRateThrottle):
@@ -111,7 +122,7 @@ def get_redirect(role):
 
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
-    throttle_classes = [LoginThrottle]
+    throttle_classes = [LoginThrottle, LoginAccountThrottle]
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)

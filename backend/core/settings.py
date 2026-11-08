@@ -167,9 +167,9 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon':  '20/minute',
+        'anon':  '600/minute',
         'user':  '200/minute',
-        'login': '5/minute',
+        'login': '300/minute',
     },
     # Number of trusted reverse proxies in front of Django (Render). None keeps the
     # legacy behaviour; see NUM_PROXIES below and the deployment guide.
