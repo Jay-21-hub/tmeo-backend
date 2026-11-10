@@ -12,6 +12,29 @@ import ViolationUpdatesPage from './pages/public/ViolationUpdatesPage'
 import ContactPage from './pages/public/ContactPage'
 import { clearAuthSession } from './utils/session'
 
+import { clearAuthSession } from './utils/session'
+import { useInactivityLogout } from './hooks/useInactivityLogout'
+
+function isStandalone() {
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true // iOS Safari
+  )
+}
+
+// Installed app skips the landing page: login if signed out, dashboard if signed in.
+// The browser still shows the public landing page.
+function StandaloneRedirect() {
+  if (!isStandalone()) return <HomePage />
+  const token = localStorage.getItem('access_token')
+  let role = null
+  try { role = JSON.parse(localStorage.getItem('user') || '{}').role } catch { role = null }
+  if (!token) return <Navigate to="/login" replace />
+  if (role === 'admin') return <Navigate to="/admin" replace />
+  if (role === 'staff') return <Navigate to="/staff" replace />
+  return <Navigate to="/enforcer" replace />
+}
+
 function PrivateRoute({ children, role }) {
   const token = localStorage.getItem('access_token')
   let user = {}
@@ -27,10 +50,11 @@ function PrivateRoute({ children, role }) {
 }
 
 export default function App() {
+  useInactivityLogout()
   return (
     <Routes>
       <Route path="/" element={<PublicLayout />}>
-        <Route index element={<HomePage />} />
+        <Route index element={<StandaloneRedirect />} />
         <Route path="about" element={<AboutPage />} />
         <Route path="mission-vision" element={<MissionVisionPage />} />
         <Route path="violation-updates" element={<ViolationUpdatesPage />} />
