@@ -11,8 +11,6 @@ import MissionVisionPage from './pages/public/MissionVisionPage'
 import ViolationUpdatesPage from './pages/public/ViolationUpdatesPage'
 import ContactPage from './pages/public/ContactPage'
 import { clearAuthSession } from './utils/session'
-
-import { clearAuthSession } from './utils/session'
 import { useInactivityLogout } from './hooks/useInactivityLogout'
 
 function isStandalone() {
