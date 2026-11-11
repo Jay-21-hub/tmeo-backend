@@ -70,7 +70,7 @@ export function ListModal({ config, onClose, onItemClick }) {
 }
 
 /* ─── Year comparison filter modal ─── */
-export function YearFilterModal({ onClose, selectedYears, onApply, availableYears, selectedBreakdowns = [] }) {
+export function YearFilterModal({ onClose, onRemove, selectedYears, onApply, availableYears, selectedBreakdowns = [] }) {
   const [localSelected, setLocalSelected] = useState(selectedYears)
   const [localBreakdowns, setLocalBreakdowns] = useState(selectedBreakdowns)
 
@@ -182,12 +182,23 @@ export function YearFilterModal({ onClose, selectedYears, onApply, availableYear
         })}
       </div>
 
-      <div style={{ display: 'flex', gap: 10 }}>
-        <button onClick={onClose} className="btn btn-secondary" style={{ flex: 1 }}>Cancel</button>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+        {onRemove && selectedYears?.length > 0 && (
+          <button
+            type="button"
+            className="btn btn-danger-ghost"
+            style={{ flex: '1 1 100%' }}
+            onClick={() => { onRemove(); onClose() }}
+          >
+            Remove comparison
+          </button>
+        )}
+        <button type="button" onClick={onClose} className="btn btn-secondary" style={{ flex: '1 1 8rem' }}>Cancel</button>
         <button
+          type="button"
           onClick={() => { onApply(localSelected, localBreakdowns); onClose() }}
           disabled={localSelected.length === 0}
-          className="btn btn-primary" style={{ flex: 2 }}
+          className="btn btn-primary" style={{ flex: '2 1 12rem' }}
         >
           {localSelected.length >= 2 ? `Compare ${localSelected.join(' vs ')}` : 'Apply Filter'}
         </button>

@@ -86,7 +86,60 @@ describe('Analytics period wiring', () => {
     expect(empty).toBeTruthy()
     expect(screen.getByText('Walang data sa napiling panahon. Try a wider range.')).toBeTruthy()
     expect(screen.queryByText('Violation Trend')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Clear comparison' })).toBeTruthy()
   })
+
+  it('removes an active comparison from the filter modal and leaves period, scope, and page filters', async () => {
+    const body = payload(4)
+    body.filter_options = { ...body.filter_options, locations: ['Perez Park'] }
+    get.mockImplementation((url) => {
+      if (String(url).includes('year_comparison')) {
+        return Promise.resolve({ data: { year_comparison: [{ month: 'Jan', 2025: 3, 2026: 1 }], breakdowns: {} } })
+      }
+      return Promise.resolve({ data: body })
+    })
+    render(<Analytics />)
+    await screen.findByText('Outstanding Tickets by Age')
+
+    const location = screen.getByLabelText('Filter by location')
+    expect([...location.options].map(o => o.value)).toContain('Perez Park')
+    fireEvent.change(location, { target: { value: 'Perez Park' } })
+    expect(screen.getByRole('button', { name: 'Remove Location filter' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Year Comparison/ }))
+    expect(screen.queryByRole('button', { name: 'Remove comparison' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    fireEvent.click(within(periodGroup()).getByRole('button', { name: 'This week' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include archived (paid) records' }))
+    const week = periodParams('week', new Date())
+    await waitFor(() => {
+      const params = analyticsCalls().at(-1)[1].params
+      expect(params).toMatchObject({ location: 'Perez Park', scope: 'active', date_from: week.date_from, date_to: week.date_to })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /Year Comparison/ }))
+    fireEvent.click(screen.getByRole('button', { name: '2025' }))
+    fireEvent.click(screen.getByRole('button', { name: '2026' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Compare 2025 vs 2026' }))
+    expect(await screen.findByRole('button', { name: 'Clear comparison' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '2025 vs 2026' }))
+    expect(screen.getByRole('button', { name: 'Remove comparison' })).toBeTruthy()
+    const callsBeforeRemove = analyticsCalls().length
+    fireEvent.click(screen.getByRole('button', { name: 'Remove comparison' }))
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByText('Year Comparison: 2025 vs 2026')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Clear comparison' })).toBeNull()
+    expect(screen.getByRole('button', { name: /Year Comparison/ })).toBeTruthy()
+    expect(within(periodGroup()).getByRole('button', { name: 'This week' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('checkbox', { name: 'Include archived (paid) records' }).checked).toBe(false)
+    expect(screen.getByRole('button', { name: 'Remove Location filter' })).toBeTruthy()
+    expect(analyticsCalls()).toHaveLength(callsBeforeRemove)
+    expect(analyticsCalls().at(-1)[1].params.scope).toBe('active')
+    expect(analyticsCalls().at(-1)[1].params.location).toBe('Perez Park')
+  }, 15000)
 
   it('ignores a slower response from the previous period', async () => {
     let resolveFirst

@@ -1032,7 +1032,7 @@ export default function Analytics({ scrollTo }) {
                     {compareYears.map((yr, i) => (
                       <span key={yr} style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 'var(--radius-full)', background: `${YEAR_COLORS[i] || '#6B7280'}22`, color: YEAR_COLORS[i] || '#6B7280' }}>{yr}</span>
                     ))}
-                    <button onClick={clearYearFilter} className="btn btn-danger-ghost btn-sm" style={{ padding: '4px 10px' }}><X size={12} /> Clear</button>
+                    <button type="button" onClick={clearYearFilter} className="btn btn-danger-ghost btn-sm" style={{ padding: '4px 10px' }}><X size={12} /> Clear comparison</button>
                   </div>
                 }
               />
@@ -1120,7 +1120,7 @@ export default function Analytics({ scrollTo }) {
       {modal && <DetailModal data={modal} onClose={() => setModal(null)} />}
       {listModal && <ListModal config={listModal} onClose={() => setListModal(null)} onItemClick={() => setListModal(null)} />}
       {showYearFilter && (
-        <YearFilterModal onClose={() => setShowYearFilter(false)} selectedYears={compareYears || []} onApply={handleApplyYears} availableYears={availableYears} selectedBreakdowns={selectedBreakdowns} />
+        <YearFilterModal onClose={() => setShowYearFilter(false)} onRemove={clearYearFilter} selectedYears={compareYears || []} onApply={handleApplyYears} availableYears={availableYears} selectedBreakdowns={selectedBreakdowns} />
       )}
     </div>
   )
