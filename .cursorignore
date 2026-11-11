@@ -8,3 +8,8 @@
 **/dist/
 **/build/
 *.sqlite3
+*.zip
+*credentials*.json
+*-adminsdk-*.json
+*.pem
+*.bak

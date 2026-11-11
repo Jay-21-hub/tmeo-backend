@@ -25,3 +25,5 @@ dev-dist/
 *credentials*.json*
 *-adminsdk-*.json
 *.zip
+*.pem
+*.bak
