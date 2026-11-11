@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import PageHeader from '../../../components/ui/PageHeader'
 import api from '../../../services/api'
 import {
@@ -16,9 +16,12 @@ import { Card, CardHeader } from '../../../components/ui/Card'
 import { ErrorState, EmptyState } from '../../../components/ui/States'
 import Alert from '../../../components/ui/Alert'
 import {
-  PERIOD_OPTIONS, STATUS_COLORS, CHART_PALETTE, YEAR_COLORS, THIS_YEAR, DEFAULT_VISIBLE,
+  ANALYTICS_PRESETS, STATUS_COLORS, CHART_PALETTE, YEAR_COLORS, THIS_YEAR, DEFAULT_VISIBLE,
   YEAR_BREAKDOWN_OPTIONS, TREND_VIEW_OPTIONS, FILTER_LABELS, WEEKDAY_NAMES, AXIS_TICK, GRID_STROKE, peso, hourRange,
 } from './analytics/analyticsConfig'
+import PeriodFilter from '../../../components/dashboard/PeriodFilter'
+import PeriodEmpty from '../../../components/dashboard/PeriodEmpty'
+import { periodParams } from '../../../components/dashboard/periodRange'
 import {
   ChartTooltip, EmptyChart, ViewAllButton, Clickable, FilterChips, ChartNote,
 } from './analytics/AnalyticsPrimitives'
@@ -60,7 +63,8 @@ function bucketTrend(rows, view) {
 }
 
 export default function Analytics({ scrollTo }) {
-  const [period, setPeriod] = useState('today')
+  const [preset, setPreset] = useState('today')
+  const [applied, setApplied] = useState(() => periodParams('today', new Date()))
   const [scope, setScope] = useState('all')
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [typeLabel, setTypeLabel] = useState('')
@@ -95,41 +99,43 @@ export default function Analytics({ scrollTo }) {
   const cols = (ratio, stack = stackPair) => (stack ? 'minmax(0, 1fr)' : ratio)
   const PAIR = 'minmax(0, 1fr) minmax(0, 1fr)'
 
-  const trendView = trendViewChoice ?? (period === 'year' ? 'monthly' : 'daily')
+  const trendView = trendViewChoice ?? (preset === 'year' ? 'monthly' : 'daily')
+  const [reloadKey, setReloadKey] = useState(0)
 
-  /* ── Data loading (initial skeleton only once; later fetches dim the page instead of unmounting it) ── */
-  const fetchData = useCallback(async () => {
+  /* One analytics request per period, scope, or filter change. A newer request wins. */
+  useEffect(() => {
+    const ctrl = new AbortController()
     const id = ++requestId.current
     setRefreshing(true)
     setError(null)
-    try {
-      const params = new URLSearchParams({ period, scope })
-      if (filters.location) params.set('location', filters.location)
-      if (filters.category) params.set('category', filters.category)
-      if (filters.vehicle_type) params.set('vehicle_type', filters.vehicle_type)
-      if (filters.violation_type) params.set('violation_type', filters.violation_type)
-      if (filters.status) params.set('status', filters.status)
-      if (filters.weekday) params.set('weekday', String(filters.weekday))
-      if (filters.hour !== null) params.set('hour', String(filters.hour))
-      const res = await api.get(`/api/violations/analytics/?${params.toString()}`)
-      if (id !== requestId.current) return // a newer request superseded this one
-      setData(res.data)
-      setLastUpdated(new Date())
-    } catch (err) {
-      if (id !== requestId.current) return
-      setError(err?.response?.data?.detail || 'The analytics data could not be loaded.')
-    } finally {
-      if (id === requestId.current) {
+    setLoading(true)
+    setData(null)
+    const params = { ...applied, scope }
+    if (filters.location) params.location = filters.location
+    if (filters.category) params.category = filters.category
+    if (filters.vehicle_type) params.vehicle_type = filters.vehicle_type
+    if (filters.violation_type) params.violation_type = filters.violation_type
+    if (filters.status) params.status = filters.status
+    if (filters.weekday) params.weekday = String(filters.weekday)
+    if (filters.hour !== null) params.hour = String(filters.hour)
+    api.get('/api/violations/analytics/', { params, signal: ctrl.signal })
+      .then((res) => {
+        if (id !== requestId.current) return
+        setData(res.data)
+        setLastUpdated(new Date())
+      })
+      .catch((err) => {
+        if (id !== requestId.current) return
+        if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return
+        setError(err?.response?.data?.detail || 'The analytics data could not be loaded.')
+      })
+      .finally(() => {
+        if (id !== requestId.current) return
         setLoading(false)
         setRefreshing(false)
-      }
-    }
-  }, [period, scope, filters])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount pattern, matches existing codebase convention
-    fetchData()
-  }, [fetchData])
+      })
+    return () => ctrl.abort()
+  }, [applied, scope, filters, reloadKey])
 
   useEffect(() => {
     if (scrollTo === 'top-enforcers' && topEnforcersRef.current) {
@@ -165,7 +171,9 @@ export default function Analytics({ scrollTo }) {
     const same = filters.weekday === weekday && filters.hour === hour
     setFilters(f => ({ ...f, weekday: same ? null : weekday, hour: same ? null : hour }))
   }
-  const changePeriod = (value) => { setPeriod(value); setTrendViewChoice(null) }
+  const onPeriod = (params, id) => { setPreset(id); setApplied(params); setTrendViewChoice(null) }
+  const showThisYear = () => onPeriod(periodParams('year', new Date()), 'year')
+  const retry = () => setReloadKey((k) => k + 1)
   const scrollToSection = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   const statusLabel = (v) => (data?.filter_options?.statuses || []).find(x => x.value === v)?.label || (v ? v.charAt(0).toUpperCase() + v.slice(1) : '')
@@ -210,7 +218,8 @@ export default function Analytics({ scrollTo }) {
   const handleExportReport = () => {
     if (!data) return
     const rows = [['Metric', 'Value']]
-    rows.push(['Period', period])
+    const windowLabel = applied.range === 'all' ? 'All time' : `${applied.date_from} to ${applied.date_to}`
+    rows.push(['Period', windowLabel])
     rows.push(['Scope', data.scope?.label || scope])
     rows.push(['Filters', chips.length ? chips.map(c => `${FILTER_LABELS[c.key]}: ${c.label}`).join('; ') : 'None'])
     rows.push(['Total Violations', data.total ?? 0])
@@ -224,7 +233,8 @@ export default function Analytics({ scrollTo }) {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `tmeo-analytics-${period}.csv`
+    const filePeriod = applied.range === 'all' ? 'all' : `${applied.date_from}_${applied.date_to}`
+    a.download = `tmeo-analytics-${filePeriod}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -240,7 +250,8 @@ export default function Analytics({ scrollTo }) {
   }
 
   const trendRows = data?.by_day || []
-  const trendDisplay = bucketTrend(trendRows, trendView)
+  const groupedByMonth = data?.trend_bucket === 'month'
+  const trendDisplay = groupedByMonth ? trendRows : bucketTrend(trendRows, trendView)
 
   const byType = (data?.by_category || []).map(item => ({
     ...item,
@@ -300,7 +311,10 @@ export default function Analytics({ scrollTo }) {
 
   const visibleEnforcers = enforcers.slice(0, DEFAULT_VISIBLE)
   const visibleAddressHotspots = addressHotspots.slice(0, DEFAULT_VISIBLE)
-  const periodLabel = period === 'today' ? 'Today' : period === 'week' ? 'This Week' : period === 'month' ? 'This Month' : 'This Year'
+  const periodLabel = ANALYTICS_PRESETS.find((p) => p.id === preset)?.label || 'Today'
+  const blankPeriod = Boolean(data) && Number(data.total) === 0
+  const countText = (n) => (blankPeriod ? '—' : Number(n || 0).toLocaleString())
+  const moneyText = (n) => (blankPeriod ? '—' : peso(n))
 
   /* ── Detail modal builders ── */
   const openTrendModal = (entry) => {
@@ -546,43 +560,20 @@ export default function Analytics({ scrollTo }) {
     })
   }
 
-  /* ── First load: skeleton. Failed first load: error state with retry. ── */
-  if (loading && !data) {
-    return (
-      <div>
-        <div className="skeleton" style={{ height: 40, width: 240, marginBottom: 24 }} />
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiCols}, minmax(0, 1fr))`, gap: 16, marginBottom: 24 }}>
-          {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 120 }} />)}
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 20 }}>
-          <div className="skeleton" style={{ height: 320 }} />
-          <div className="skeleton" style={{ height: 320 }} />
-        </div>
-      </div>
-    )
-  }
-  if (!data) {
-    return <ErrorState title="Analytics could not be loaded" message={error || 'Please check your connection and try again.'} onRetry={fetchData} />
-  }
-
   return (
     <div ref={setRootEl} aria-busy={refreshing} style={{ minWidth: 0 }}>
       <PageHeader title="Analytics" />
 
       {/* ── Filter Bar ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 12 }}>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {PERIOD_OPTIONS.map(opt => (
-            <button key={opt.value} className={`btn btn-sm ${period === opt.value ? 'btn-primary' : 'btn-secondary'}`} onClick={() => changePeriod(opt.value)}>{opt.label}</button>
-          ))}
-        </div>
+        <PeriodFilter value={preset} initialPreset="today" presets={ANALYTICS_PRESETS} onChange={onPeriod} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {lastUpdated && (
             <span className="text-caption" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
               <Clock size={11} /> {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
-          <button className="btn btn-secondary btn-sm" onClick={fetchData} disabled={refreshing}>
+          <button className="btn btn-secondary btn-sm" onClick={retry} disabled={refreshing}>
             <RefreshCw size={13} className={refreshing ? 'spin' : ''} /> Refresh
           </button>
           <button
@@ -618,10 +609,24 @@ export default function Analytics({ scrollTo }) {
 
       <FilterChips chips={chips} onRemove={clearFilter} onClearAll={clearAllFilters} />
 
+      {loading && !data ? (
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiCols}, minmax(0, 1fr))`, gap: 16, marginBottom: 24 }}>
+            {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 120 }} />)}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 20 }}>
+            <div className="skeleton" style={{ height: 320 }} />
+            <div className="skeleton" style={{ height: 320 }} />
+          </div>
+        </div>
+      ) : !data ? (
+        <ErrorState title="Analytics could not be loaded" message={error || 'Please check your connection and try again.'} onRetry={retry} />
+      ) : (
+      <>
       {error && (
         <div style={{ marginBottom: 14 }}>
           <Alert tone="danger" title="Could not refresh the analytics">
-            {error} The figures below are from the last successful load. <button type="button" className="link-chip" onClick={fetchData}>Retry</button>
+            {error} The figures below are from the last successful load. <button type="button" className="link-chip" onClick={retry}>Retry</button>
           </Alert>
         </div>
       )}
@@ -641,24 +646,24 @@ export default function Analytics({ scrollTo }) {
       <div style={{ opacity: refreshing ? 0.6 : 1, transition: 'opacity var(--transition-fast)' }}>
         {/* ── KPI Cards ── */}
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiCols}, minmax(0, 1fr))`, gap: 16, marginBottom: 20 }}>
-          <StatCard label={`Total Violations (${periodLabel})`} value={summary.total.toLocaleString()} icon={FileText} accent="var(--blue-600)" trend={comparison?.total_pct} sublabel={comparison?.label} />
-          <StatCard label="Total Penalties Assessed" value={peso(summary.total_penalty)} icon={DollarSign} accent="#D97706" trend={comparison?.total_penalty_pct} sublabel={comparison?.label} />
-          <StatCard label="Total Collected" value={peso(summary.total_collected)} icon={TrendingUp} accent="#7C3AED" trend={comparison?.total_collected_pct} sublabel={comparison?.label} />
-          <StatCard label="Pending Violations" value={summary.pending.toLocaleString()} icon={Activity} accent="var(--warning-600)" trend={comparison?.pending_pct} sublabel={comparison?.label} />
-          <StatCard label="Paid Violations" value={summary.paid.toLocaleString()} icon={Shield} accent="var(--success-600)" trend={comparison?.paid_pct} sublabel={comparison?.label} />
+          <StatCard label={`Total Violations (${periodLabel})`} value={countText(summary.total)} icon={FileText} accent="var(--blue-600)" trend={comparison?.total_pct} sublabel={comparison?.label || undefined} />
+          <StatCard label="Total Penalties Assessed" value={moneyText(summary.total_penalty)} icon={DollarSign} accent="#D97706" trend={comparison?.total_penalty_pct} sublabel="Assessed amounts on tickets issued in this period" />
+          <StatCard label="Total Collected" value={moneyText(summary.total_collected)} icon={TrendingUp} accent="#7C3AED" trend={comparison?.total_collected_pct} sublabel="Counted by date issued, not payment date" />
+          <StatCard label="Pending Violations" value={countText(summary.pending)} icon={Activity} accent="var(--warning-600)" trend={comparison?.pending_pct} sublabel="Issued in this period and still pending" />
+          <StatCard label="Paid Violations" value={countText(summary.paid)} icon={Shield} accent="var(--success-600)" trend={comparison?.paid_pct} sublabel={comparison?.label || undefined} />
           <StatCard label="Most Common Vehicle Type" value={mostCommonVehicleType} icon={Truck} accent="var(--slate-700)" />
         </div>
 
         {summary.total === 0 ? (
           <Card style={{ marginBottom: 16 }}>
-            <EmptyState
-              icon={Layers}
-              title={chips.length ? 'No data for selected filters' : `No violations recorded for ${periodLabel}`}
-              message={chips.length
-                ? 'No records match this combination of filters. Remove a filter or clear all to return to the broader dataset.'
-                : 'Try a longer period, or include archived records, to see analytics here.'}
-              action={chips.length ? <button type="button" className="btn btn-secondary" onClick={clearAllFilters}>Clear all filters</button> : null}
-            />
+            {chips.length ? (
+              <EmptyState
+                icon={Layers}
+                title="No data for selected filters"
+                message="No records match this combination of filters. Remove a filter or clear all to return to the broader dataset."
+                action={<button type="button" className="btn btn-secondary" onClick={clearAllFilters}>Clear all filters</button>}
+              />
+            ) : <PeriodEmpty onShowThisYear={showThisYear} />}
           </Card>
         ) : (
           <>
@@ -668,21 +673,22 @@ export default function Analytics({ scrollTo }) {
             <CardHeader
               title="Violation Trend"
               subtitle="Click a point to view details"
-              action={
+              action={!groupedByMonth && (
                 <div style={{ display: 'flex', gap: 4 }}>
                   {TREND_VIEW_OPTIONS.map(opt => (
                     <button key={opt.value} className={`btn btn-sm ${trendView === opt.value ? 'btn-primary' : 'btn-secondary'}`} style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => setTrendViewChoice(opt.value)}>{opt.label}</button>
                   ))}
                 </div>
-              }
+              )}
             />
             {trendDisplay.length >= 2 ? (
               <>
                 <TrendChart data={trendDisplay} onSelect={openTrendModal} />
-                {trendView !== 'daily' && <ChartNote>Weekly weeks start on Monday; the first and last groups can be partial.</ChartNote>}
+                {groupedByMonth && <ChartNote>This range is grouped by month, the same rule as the dashboard trend.</ChartNote>}
+                {!groupedByMonth && trendView !== 'daily' && <ChartNote>Weekly weeks start on Monday; the first and last groups can be partial.</ChartNote>}
               </>
             ) : (
-              <EmptyChart icon={TrendingUp} message={period === 'today' ? 'A trend needs at least two days. Choose This Week or longer — see Peak Hours below for today.' : 'Not enough days of data for a trend in this selection'} />
+              <EmptyChart icon={TrendingUp} message={preset === 'today' ? 'A trend needs at least two days. Choose This week or longer — see Peak Hours below for today.' : 'Not enough days of data for a trend in this selection'} />
             )}
           </Card>
 
@@ -729,7 +735,7 @@ export default function Analytics({ scrollTo }) {
         {/* ── Row 2: Violation types + Enforcers ── */}
         <div style={{ display: 'grid', gridTemplateColumns: cols(PAIR), gap: 16, marginBottom: 16 }}>
           <Card>
-            <CardHeader title="Violation Types" subtitle="Select a bar to filter the whole dashboard" />
+            <CardHeader title="Violation Types" subtitle="Counts violation items, not tickets. Select a bar to filter the page." />
             {byType.length > 0 ? (
               <>
                 <RankedBarChart
@@ -797,6 +803,7 @@ export default function Analytics({ scrollTo }) {
                 </div>
               }
             />
+            <ChartNote>Compares full calendar years and does not follow the selected period.</ChartNote>
             {yearCompareLoading ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 260, gap: 10, color: 'var(--slate-400)', fontSize: 13 }}>
                 <RefreshCw size={16} className="spin" /> Loading comparison data...
@@ -1085,28 +1092,31 @@ export default function Analytics({ scrollTo }) {
               </div>
             </Card>
           </div>
-
-          <div id="an-aging">
-            <Card style={{ height: '100%' }}>
-              <CardHeader title="Outstanding Tickets by Age" subtitle="Unpaid violations by days since issued — as of today" />
-              {aging && aging.total_count > 0 ? (
-                <>
-                  <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 8 }}>
-                    <div><div className="text-display" style={{ fontSize: 28 }}>{aging.total_count.toLocaleString()}</div><div className="text-caption">unpaid violations</div></div>
-                    <div><div className="text-display" style={{ fontSize: 28 }}>{peso(aging.total_amount)}</div><div className="text-caption">outstanding</div></div>
-                  </div>
-                  <AgingChart buckets={aging.buckets} />
-                </>
-              ) : <EmptyChart icon={Hourglass} message="No unpaid violations are outstanding" />}
-              {aging && <ChartNote>Counts active pending/processing tickets as of {aging.as_of} and ignores the period and time-of-day filters. Age ranges are neutral — no official payment deadline is assumed.</ChartNote>}
-            </Card>
-          </div>
         </div>
 
           </>
         )}
 
+        <div id="an-aging" style={{ marginBottom: 16 }}>
+          <Card>
+            <CardHeader title="Outstanding Tickets by Age" subtitle="Unpaid violations by days since issued — as of today" />
+            {aging && aging.total_count > 0 ? (
+              <>
+                <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 8 }}>
+                  <div><div className="text-display" style={{ fontSize: 28 }}>{aging.total_count.toLocaleString()}</div><div className="text-caption">unpaid violations</div></div>
+                  <div><div className="text-display" style={{ fontSize: 28 }}>{peso(aging.total_amount)}</div><div className="text-caption">outstanding</div></div>
+                </div>
+                <AgingChart buckets={aging.buckets} />
+              </>
+            ) : <EmptyChart icon={Hourglass} message="No unpaid violations are outstanding" />}
+            {aging && <ChartNote>Counts active pending/processing tickets as of {aging.as_of} and ignores the period and time-of-day filters. Age ranges are neutral — no official payment deadline is assumed.</ChartNote>}
+          </Card>
+        </div>
+
       </div>
+
+      </>
+      )}
 
       {/* ── Modals ── */}
       {modal && <DetailModal data={modal} onClose={() => setModal(null)} />}

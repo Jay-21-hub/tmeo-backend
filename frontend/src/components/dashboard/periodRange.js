@@ -74,6 +74,9 @@ export function periodParams(preset, now, custom) {
 
   if (preset === 'today') {
     from = today
+  } else if (preset === 'week') {
+    const weekday = new Date(Date.UTC(today.y, today.m - 1, today.d)).getUTCDay()
+    from = addDays(today, -((weekday + 6) % 7))
   } else if (preset === 'last7') {
     from = addDays(today, -6)
   } else if (preset === 'month') {

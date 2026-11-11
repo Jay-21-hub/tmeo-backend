@@ -11,6 +11,18 @@ export const PERIOD_OPTIONS = [
   { label: 'This Year', value: 'year' },
 ]
 
+/** PeriodFilter presets for this page. "This week" is Monday through today in Manila. */
+export const ANALYTICS_PRESETS = [
+  { id: 'today', label: 'Today' },
+  { id: 'week', label: 'This week' },
+  { id: 'last7', label: 'Last 7 days' },
+  { id: 'month', label: 'This month' },
+  { id: 'lastMonth', label: 'Last month' },
+  { id: 'year', label: 'This year' },
+  { id: 'all', label: 'All time' },
+  { id: 'custom', label: 'Custom' },
+]
+
 export const STATUS_COLORS = {
   pending: '#F59E0B',
   processing: '#8B5CF6',

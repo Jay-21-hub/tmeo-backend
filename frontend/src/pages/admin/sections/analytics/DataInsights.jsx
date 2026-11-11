@@ -332,7 +332,7 @@ export default function DataInsights({
     {
       key: 'aging', icon: Hourglass, color: '#4B5563', title: 'Outstanding Tickets', body: agingCopy(agingInsight),
       tag: 'Active unpaid records — ignores period',
-      action: agingInsight.state === 'ok' ? { kind: 'scroll', target: 'an-aging', label: 'View aging' } : null,
+      action: agingInsight.state === 'ok' ? { kind: 'scroll', target: 'an-aging', label: 'View outstanding tickets' } : null,
     },
     {
       key: 'repeat', icon: Shield, color: '#DC2626', title: 'Repeat Violators', body: repeatCopy(repeat),

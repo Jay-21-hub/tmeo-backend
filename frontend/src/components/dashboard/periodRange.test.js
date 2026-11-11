@@ -85,6 +85,21 @@ describe('periodParams', () => {
     })
   })
 
+  it('builds This week as Monday through today in Manila', () => {
+    expect(periodParams('week', at('2026-03-16T02:00:00Z'))).toEqual({
+      date_from: '2026-03-16', date_to: '2026-03-16',
+    })
+    expect(periodParams('week', at('2026-03-15T02:00:00Z'))).toEqual({
+      date_from: '2026-03-09', date_to: '2026-03-15',
+    })
+    expect(periodParams('week', at('2026-03-01T02:00:00Z'))).toEqual({
+      date_from: '2026-02-23', date_to: '2026-03-01',
+    })
+    expect(periodParams('week', at('2026-01-04T02:00:00Z'))).toEqual({
+      date_from: '2025-12-29', date_to: '2026-01-04',
+    })
+  })
+
   it('custom passes the two dates through and does not look at now', () => {
     expect(periodParams('custom', at('1999-01-01T00:00:00Z'), {
       date_from: '2024-05-01',

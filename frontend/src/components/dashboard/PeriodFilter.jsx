@@ -10,14 +10,17 @@ import './PeriodFilter.css'
  * `now` is an instant; omitted, it is the current instant. Manila day math
  * lives in periodRange.js.
  */
-export default function PeriodFilter({ value = DEFAULT_PRESET, onChange, now }) {
-  const [preset, setPreset] = useState(value)
-  const [seen, setSeen] = useState(value)
+export default function PeriodFilter({
+  value, initialPreset = DEFAULT_PRESET, onChange, now, presets = PERIOD_PRESETS,
+}) {
+  const selected = value ?? initialPreset
+  const [preset, setPreset] = useState(selected)
+  const [seen, setSeen] = useState(selected)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  if (value !== seen) {
-    setSeen(value)
-    setPreset(value)
+  if (selected !== seen) {
+    setSeen(selected)
+    setPreset(selected)
   }
   const issue = customRangeIssue(dateFrom, dateTo)
   const instant = now ?? new Date()
@@ -36,7 +39,7 @@ export default function PeriodFilter({ value = DEFAULT_PRESET, onChange, now }) 
   return (
     <div className="period-filter">
       <div className="period-filter-presets" role="group" aria-label="Period">
-        {PERIOD_PRESETS.map((opt) => (
+        {presets.map((opt) => (
           <button
             key={opt.id}
             type="button"
