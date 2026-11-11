@@ -1,0 +1,73 @@
+/* Period bar. Same btn-sm / btn-primary / btn-secondary as Analytics.
+   Wraps at phone width so a 360px screen does not scroll sideways. */
+.period-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.period-filter-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.period-filter-custom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  align-items: end;
+}
+
+.period-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.period-filter-field .input {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.period-filter-apply {
+  justify-self: start;
+}
+
+.period-filter-error {
+  margin: 0;
+  font: var(--text-caption);
+  font-weight: 600;
+  color: var(--danger-600);
+}
+
+.period-empty {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.period-empty p {
+  margin: 0 auto 12px;
+  max-width: 28em;
+  font: var(--text-caption);
+  color: var(--slate-600);
+}
+
+@media (min-width: 560px) {
+  .period-filter-custom {
+    grid-template-columns: minmax(0, 180px) minmax(0, 180px) auto;
+  }
+  .period-filter-error {
+    grid-column: 1 / -1;
+  }
+}

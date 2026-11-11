@@ -42,6 +42,19 @@
 .dash-kpi-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .dash-kpi-label { font: var(--text-caption); font-weight: 600; color: var(--slate-600); }
 .dash-kpi-value { font-size: 24px; line-height: 1.15; font-weight: 800; letter-spacing: -0.02em; color: var(--slate-950); word-break: break-word; }
+.dash-kpis--5 .dash-kpi-value { white-space: nowrap; }
+/* Two columns (under 620): smaller than 24px so a peso amount stays on one line. */
+@container dash (max-width: 619px) {
+  .dash-kpis--5 .dash-kpi-value { font-size: clamp(14px, 4.2cqi, 18px); }
+}
+/* Three columns (620–959): 18px once the card is wide enough, a little
+   smaller at 620 so a peso amount still fits on one line. */
+@container dash (min-width: 620px) and (max-width: 959px) {
+  .dash-kpis--5 .dash-kpi-value { font-size: clamp(16px, 2.6cqi, 18px); }
+}
+@container dash (min-width: 960px) {
+  .dash-kpis--5 .dash-kpi-value { font-size: 14px; letter-spacing: -0.03em; }
+}
 .dash-kpi-sub { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; font: var(--text-caption); font-weight: 700; }
 .dash-kpi-sub.is-up { color: var(--success-600); }
 .dash-kpi-sub.is-down { color: var(--danger-600); }
