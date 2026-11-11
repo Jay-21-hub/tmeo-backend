@@ -1,24 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, ImagePlus, RotateCcw, Trash2, X } from 'lucide-react'
 import { Button } from '../../../../components/ui'
+import { resizeImageToJpegBase64, scanLicenseRequest } from '../../../../utils/licenseScan'
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const MAX_SIZE_BYTES = 5 * 1024 * 1024
 
 /**
- * Upload Photo — Step 1, Driver Information → Scan License.
+ * Upload Photo — Step 1, Driver Information.
  *
- * A plain photo-attachment alternative to the OCR camera scanner
- * (LicenseScanner): pick an image from the device, preview it, remove or
- * replace it. This does NOT read or extract anything from the photo — no
- * OCR is performed here, it only attaches a picture to the OVR for the
- * final-defense demo. The file itself lives in the parent form state
- * (`form.license_photo`) and rides along in the existing multipart submit
- * as the `image` field — no new backend endpoint or model.
+ * Pick an image from the device, preview it, and attach it to the OVR.
+ * The file lives in the parent form (`form.license_photo`) and is sent
+ * later as the multipart `image` field on create. Done also reads the
+ * same photo through POST /api/violations/scan-license/ (resized JPEG,
+ * same body as the camera scanner) and hands the result to `onScan`.
+ * A failed or empty read does not remove the attachment. `onScan` is
+ * optional so a caller that only wants the file can omit it.
  */
-export default function LicensePhotoUpload({ photo, onChange, onClose }) {
+export default function LicensePhotoUpload({ photo, onChange, onClose, onScan }) {
   const inputRef = useRef(null)
   const [error, setError] = useState('')
+  const [reading, setReading] = useState(false)
   // Derived straight from `photo`, not stored in state — avoids a
   // setState-in-effect render cascade for what's just a computed URL.
   const previewUrl = useMemo(() => (photo ? URL.createObjectURL(photo) : null), [photo])
@@ -42,11 +44,36 @@ export default function LicensePhotoUpload({ photo, onChange, onClose }) {
     onChange(file)
   }
 
+  const finish = async () => {
+    if (!photo || typeof onScan !== 'function') {
+      onClose()
+      return
+    }
+    setReading(true)
+    setError('')
+    try {
+      const base64 = await resizeImageToJpegBase64(photo)
+      onScan(await scanLicenseRequest(base64))
+    } catch (err) {
+      onScan({
+        ok: false,
+        status: null,
+        parsed: null,
+        rawText: '',
+        errorDetail: err?.message || 'The photo could not be prepared for reading.',
+        errorKind: 'prepare',
+      })
+    } finally {
+      setReading(false)
+      onClose()
+    }
+  }
+
   return (
     <div className="ovr-scan">
       <div className="ovr-scan-head">
         <span className="ovr-scan-title"><ImagePlus size={16} aria-hidden="true" /> Upload license photo</span>
-        <button type="button" className="ovr-icon-btn" onClick={onClose} aria-label="Close upload"><X size={16} /></button>
+        <button type="button" className="ovr-icon-btn" onClick={onClose} disabled={reading} aria-label="Close upload"><X size={16} /></button>
       </div>
 
       <input
@@ -65,9 +92,11 @@ export default function LicensePhotoUpload({ photo, onChange, onClose }) {
         <>
           <img src={previewUrl} alt="Selected driver's license" className="ovr-scan-shot" />
           <div className="ovr-scan-actions">
-            <Button variant="secondary" icon={RotateCcw} onClick={pick}>Replace</Button>
-            <Button variant="secondary" icon={Trash2} onClick={() => onChange(null)}>Remove</Button>
-            <Button variant="primary" icon={CheckCircle2} onClick={onClose} style={{ flex: 1 }}>Done</Button>
+            <Button variant="secondary" icon={RotateCcw} onClick={pick} disabled={reading}>Replace</Button>
+            <Button variant="secondary" icon={Trash2} onClick={() => onChange(null)} disabled={reading}>Remove</Button>
+            <Button variant="primary" icon={CheckCircle2} onClick={finish} loading={reading} style={{ flex: 1 }}>
+              {reading ? 'Reading…' : 'Done'}
+            </Button>
           </div>
         </>
       )}

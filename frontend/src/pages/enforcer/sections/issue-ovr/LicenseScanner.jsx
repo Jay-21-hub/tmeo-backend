@@ -1,20 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { Camera, CheckCircle2, IdCard, RefreshCw, RotateCcw, ScanLine, SwitchCamera, X } from 'lucide-react'
-import api from '../../../../services/api'
-import { API } from '../../../../constants'
 import { Button } from '../../../../components/ui'
+import { formatScanFailure, hasReadableLicense, resizeImageToJpegBase64, scanLicenseRequest } from '../../../../utils/licenseScan'
 
 /**
  * Driver's-license scanner (Step 1). Talks to the existing
  * POST /api/violations/scan-license/ endpoint — { image: <base64 jpeg> } in,
  * { raw_text, parsed: { full_name, license_number, address } } out.
+ * Capture shrinks the frame to a 1600px JPEG before that request.
  *
  * It never writes to the form itself: "Apply" hands the parsed result to the
  * parent, which merges it without overwriting anything already typed.
  */
 export default function LicenseScanner({ onApply, onClose }) {
   const videoRef = useRef(null)
-  const canvasRef = useRef(null)
   const streamRef = useRef(null)
   const [cameraOn, setCameraOn] = useState(false)
   const [facingMode, setFacingMode] = useState('environment')
@@ -62,34 +61,41 @@ export default function LicenseScanner({ onApply, onClose }) {
     startCamera(next)
   }
 
-  const capture = () => {
-    const video = videoRef.current, canvas = canvasRef.current
-    if (!video || !canvas || !video.videoWidth) return
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    canvas.getContext('2d').drawImage(video, 0, 0)
-    setImage(canvas.toDataURL('image/jpeg', 0.92))
-    setResult(null)
-    stopCamera()
+  const capture = async () => {
+    const video = videoRef.current
+    if (!video?.videoWidth || !video?.videoHeight) {
+      setError('The photo was not captured. The camera frame was not ready. Try again.')
+      return
+    }
+    setError('')
+    try {
+      const base64 = await resizeImageToJpegBase64(video)
+      setImage(`data:image/jpeg;base64,${base64}`)
+      setResult(null)
+      stopCamera()
+    } catch {
+      setError('The photo was not captured. Try again.')
+    }
   }
 
   const retake = () => { setImage(null); setResult(null); setError(''); startCamera() }
 
   const scan = async () => {
     if (!image) return
-    setScanning(true); setError(''); setResult(null)
+    setScanning(true)
+    setError('')
+    setResult(null)
     try {
-      const res = await api.post(API.SCAN_LICENSE, { image: image.split(',')[1] })
-      setResult(res.data)
-    } catch {
-      setError('The scan failed. Retake the photo with the card flat, in focus and well lit.')
+      const outcome = await scanLicenseRequest(image)
+      if (outcome?.ok) setResult({ parsed: outcome.parsed, raw_text: outcome.rawText })
+      else setError(formatScanFailure(outcome))
     } finally {
       setScanning(false)
     }
   }
 
   const parsed = result?.parsed
-  const found = parsed && Object.values(parsed).some(Boolean)
+  const found = hasReadableLicense(parsed)
 
   return (
     <div className="ovr-scan">
@@ -109,7 +115,6 @@ export default function LicenseScanner({ onApply, onClose }) {
         )}
         <span className="ovr-viewfinder-corners" aria-hidden="true" />
       </div>
-      <canvas ref={canvasRef} style={{ display: 'none' }} />
       {image && <img src={image} alt="Captured driver's license" className="ovr-scan-shot" />}
 
       {error && <p className="ovr-inline-error" role="alert">{error}</p>}

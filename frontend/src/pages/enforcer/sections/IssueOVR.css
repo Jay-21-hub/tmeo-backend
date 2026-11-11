@@ -128,7 +128,7 @@
   background: var(--navy-950); border-radius: var(--radius-md);
   display: flex; align-items: center; justify-content: center;
 }
-.ovr-viewfinder video { width: 100%; height: 100%; object-fit: cover; }
+.ovr-viewfinder video { width: 100%; height: 100%; object-fit: contain; }
 .ovr-viewfinder-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--slate-500); font: var(--text-caption); }
 .ovr-viewfinder-corners { position: absolute; inset: 14% 10%; border: 2px dashed rgba(255, 255, 255, 0.5); border-radius: var(--radius-md); pointer-events: none; }
 .ovr-scan-shot { width: 100%; max-height: 240px; object-fit: cover; border-radius: var(--radius-md); }
@@ -248,6 +248,8 @@
 
   .ovr-head-actions { width: 100%; }
   .ovr-head-actions .btn { flex: 1; min-height: 44px; justify-content: center; }
+  .ovr-scan-actions { flex-wrap: wrap; }
+  .ovr-scan-actions .btn { flex: 1 1 auto; }
   .ovr-confiscated-row { flex-direction: column; align-items: flex-start; gap: 2px; }
   .ovr-confiscated-value, .ovr-confiscated-missing { text-align: left; }
 }

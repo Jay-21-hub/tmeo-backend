@@ -3,6 +3,7 @@ import { Calendar, Clock, ImagePlus, Pencil, ScanLine, Search } from 'lucide-rea
 import { Alert, Button, Field, ReviewRow, ReviewSection, TextInput, Textarea } from '../../../../components/ui'
 import { ErrorState } from '../../../../components/ui/States'
 import { toTitleCase } from '../../../../utils/helpers'
+import { formatScanFailure, hasReadableLicense } from '../../../../utils/licenseScan'
 import LicenseScanner from './LicenseScanner'
 import LicensePhotoUpload from './LicensePhotoUpload'
 import VehicleFields from './VehicleFields'
@@ -60,6 +61,7 @@ export function StepDriverVehicle({
   const [scanOpen, setScanOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [ocrApplied, setOcrApplied] = useState(false)
+  const [uploadNote, setUploadNote] = useState(null)
   const set = (patch) => setForm(f => ({ ...f, ...patch }))
 
   const openScan = () => { setScanOpen(o => !o); setUploadOpen(false) }
@@ -101,14 +103,37 @@ export function StepDriverVehicle({
         {uploadOpen && (
           <LicensePhotoUpload
             photo={form.license_photo}
-            onChange={(file) => set({ license_photo: file })}
+            onChange={(file) => {
+              set({ license_photo: file })
+              setUploadNote(null)
+            }}
             onClose={() => setUploadOpen(false)}
+            onScan={(outcome) => {
+              if (outcome?.ok && hasReadableLicense(outcome.parsed)) {
+                onApplyOcr(outcome.parsed)
+                setOcrApplied(true)
+                setUploadNote(null)
+                return
+              }
+              if (outcome?.ok) {
+                setUploadNote({ text: 'Nothing readable was found in the photo. Type the details below.', alert: false })
+                return
+              }
+              setUploadNote({ text: formatScanFailure(outcome), alert: true })
+            }}
           />
         )}
         {form.license_photo && !uploadOpen && (
-          <div className="ovr-scan" style={{ marginBottom: 'var(--space-4)', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span className="ovr-scan-title"><ImagePlus size={16} aria-hidden="true" /> Photo attached</span>
-            <Button variant="secondary" size="sm" onClick={openUpload}>Remove / replace</Button>
+          <div className="ovr-scan" style={{ marginBottom: 'var(--space-4)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <span className="ovr-scan-title"><ImagePlus size={16} aria-hidden="true" /> Photo attached</span>
+              <Button variant="secondary" size="sm" onClick={openUpload}>Remove / replace</Button>
+            </div>
+            {uploadNote && (
+              <p className={uploadNote.alert ? 'ovr-inline-error' : 'ovr-inline-note'} role={uploadNote.alert ? 'alert' : 'status'} style={{ marginBottom: 0 }}>
+                {uploadNote.text}
+              </p>
+            )}
           </div>
         )}
 
