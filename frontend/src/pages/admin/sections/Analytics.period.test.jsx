@@ -66,6 +66,28 @@ describe('Analytics period wiring', () => {
     })
   })
 
+  it('keeps Year Comparison when the period has no tickets, and keeps PeriodEmpty', async () => {
+    get.mockImplementation((url) => {
+      if (String(url).includes('year_comparison')) {
+        return Promise.resolve({
+          data: { year_comparison: [{ month: 'Jan', 2025: 3, 2026: 1 }], breakdowns: {} },
+        })
+      }
+      return Promise.resolve({ data: payload(0) })
+    })
+    render(<Analytics />)
+    const empty = await screen.findByText('Walang data sa napiling panahon. Try a wider range.')
+    fireEvent.click(screen.getByRole('button', { name: /Year Comparison/ }))
+    fireEvent.click(screen.getByRole('button', { name: '2025' }))
+    fireEvent.click(screen.getByRole('button', { name: '2026' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Compare 2025 vs 2026' }))
+    expect(await screen.findByText('Year Comparison: 2025 vs 2026')).toBeTruthy()
+    expect(screen.getByText('Compares full calendar years and does not follow the selected period.')).toBeTruthy()
+    expect(empty).toBeTruthy()
+    expect(screen.getByText('Walang data sa napiling panahon. Try a wider range.')).toBeTruthy()
+    expect(screen.queryByText('Violation Trend')).toBeNull()
+  })
+
   it('ignores a slower response from the previous period', async () => {
     let resolveFirst
     let n = 0

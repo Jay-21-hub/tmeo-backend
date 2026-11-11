@@ -787,82 +787,6 @@ export default function Analytics({ scrollTo }) {
           </div>
         </div>
 
-      {/* ── Year Comparison ── */}
-      {compareYears && (
-        <div style={{ marginBottom: 16 }}>
-          <Card>
-            <CardHeader
-              title={`Year Comparison: ${compareYears.join(' vs ')}`}
-              subtitle={compareYears.length >= 2 ? 'Monthly breakdown per year' : 'Select more years to compare'}
-              action={
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {compareYears.map((yr, i) => (
-                    <span key={yr} style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 'var(--radius-full)', background: `${YEAR_COLORS[i] || '#6B7280'}22`, color: YEAR_COLORS[i] || '#6B7280' }}>{yr}</span>
-                  ))}
-                  <button onClick={clearYearFilter} className="btn btn-danger-ghost btn-sm" style={{ padding: '4px 10px' }}><X size={12} /> Clear</button>
-                </div>
-              }
-            />
-            <ChartNote>Compares full calendar years and does not follow the selected period.</ChartNote>
-            {yearCompareLoading ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 260, gap: 10, color: 'var(--slate-400)', fontSize: 13 }}>
-                <RefreshCw size={16} className="spin" /> Loading comparison data...
-              </div>
-            ) : compareYears.length === 1 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200, gap: 12 }}>
-                <div style={{ width: 48, height: 48, borderRadius: 14, background: '#7C3AED15', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Filter size={22} color="#7C3AED" /></div>
-                <div style={{ textAlign: 'center' }}>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--slate-700)' }}>Add more years to compare</p>
-                  <p className="text-caption" style={{ margin: '4px 0 0' }}>You've selected {compareYears[0]}. Add one or more years in the filter to compare.</p>
-                </div>
-                <button onClick={() => setShowYearFilter(true)} className="btn btn-primary btn-sm">Open Year Filter</button>
-              </div>
-            ) : rawYearComparison.length > 0 ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={rawYearComparison} margin={{ top: 4, right: 16, bottom: 0, left: 0 }} onClick={(state) => { const row = rowFromChartEvent(rawYearComparison, state); if (row) openYearModal(row) }} style={{ cursor: 'pointer' }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9CA3AF' }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} tickLine={false} axisLine={false} allowDecimals={false} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                  {activeYears.map((yr, i) => <Bar key={yr} dataKey={String(yr)} fill={YEAR_COLORS[i] || '#6B7280'} radius={[4, 4, 0, 0]} maxBarSize={22} />)}
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <EmptyChart icon={BarChart2} message="No comparison data available for the selected years" />}
-          </Card>
-
-          {/* ── Per-category breakdown charts (one per checked category) ── */}
-          {compareYears.length >= 2 && selectedBreakdowns.map(key => {
-            const opt = YEAR_BREAKDOWN_OPTIONS.find(o => o.key === key)
-            const rows = yearBreakdowns[key] || []
-            return (
-              <Card key={key} style={{ marginTop: 16 }}>
-                <CardHeader
-                  title={`${opt?.label || key}: ${compareYears.join(' vs ')}`}
-                  subtitle={opt?.subtitle}
-                />
-                {yearCompareLoading ? (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 220, gap: 10, color: 'var(--slate-400)', fontSize: 13 }}>
-                    <RefreshCw size={16} className="spin" /> Loading comparison data...
-                  </div>
-                ) : rows.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={Math.max(220, rows.length * 40)}>
-                    <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" horizontal={false} />
-                      <XAxis type="number" tick={{ fontSize: 11, fill: '#9CA3AF' }} tickLine={false} axisLine={false} allowDecimals={false} />
-                      <YAxis type="category" dataKey="category" width={110} tick={{ fontSize: 11, fill: '#6B7280' }} tickLine={false} axisLine={false} />
-                      <Tooltip content={<ChartTooltip />} />
-                      <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                      {activeYears.map((yr, i) => <Bar key={yr} dataKey={String(yr)} fill={YEAR_COLORS[i] || '#6B7280'} radius={[0, 4, 4, 0]} maxBarSize={18} />)}
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : <EmptyChart icon={BarChart2} message={`No ${opt?.label?.toLowerCase() || 'category'} data for the selected years`} />}
-              </Card>
-            )
-          })}
-        </div>
-      )}
-
         {/* ── Data Insights ── */}
         <DataInsights
           commonViolations={commonViolations}
@@ -1095,6 +1019,80 @@ export default function Analytics({ scrollTo }) {
         </div>
 
           </>
+        )}
+
+        {compareYears && (
+          <div style={{ marginBottom: 16 }}>
+            <Card>
+              <CardHeader
+                title={`Year Comparison: ${compareYears.join(' vs ')}`}
+                subtitle={compareYears.length >= 2 ? 'Monthly breakdown per year' : 'Select more years to compare'}
+                action={
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {compareYears.map((yr, i) => (
+                      <span key={yr} style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 'var(--radius-full)', background: `${YEAR_COLORS[i] || '#6B7280'}22`, color: YEAR_COLORS[i] || '#6B7280' }}>{yr}</span>
+                    ))}
+                    <button onClick={clearYearFilter} className="btn btn-danger-ghost btn-sm" style={{ padding: '4px 10px' }}><X size={12} /> Clear</button>
+                  </div>
+                }
+              />
+              <ChartNote>Compares full calendar years and does not follow the selected period.</ChartNote>
+              {yearCompareLoading ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 260, gap: 10, color: 'var(--slate-400)', fontSize: 13 }}>
+                  <RefreshCw size={16} className="spin" /> Loading comparison data...
+                </div>
+              ) : compareYears.length === 1 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200, gap: 12 }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 14, background: '#7C3AED15', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Filter size={22} color="#7C3AED" /></div>
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--slate-700)' }}>Add more years to compare</p>
+                    <p className="text-caption" style={{ margin: '4px 0 0' }}>You've selected {compareYears[0]}. Add one or more years in the filter to compare.</p>
+                  </div>
+                  <button onClick={() => setShowYearFilter(true)} className="btn btn-primary btn-sm">Open Year Filter</button>
+                </div>
+              ) : rawYearComparison.length > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={rawYearComparison} margin={{ top: 4, right: 16, bottom: 0, left: 0 }} onClick={(state) => { const row = rowFromChartEvent(rawYearComparison, state); if (row) openYearModal(row) }} style={{ cursor: 'pointer' }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9CA3AF' }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                    {activeYears.map((yr, i) => <Bar key={yr} dataKey={String(yr)} fill={YEAR_COLORS[i] || '#6B7280'} radius={[4, 4, 0, 0]} maxBarSize={22} />)}
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : <EmptyChart icon={BarChart2} message="No comparison data available for the selected years" />}
+            </Card>
+
+            {compareYears.length >= 2 && selectedBreakdowns.map(key => {
+              const opt = YEAR_BREAKDOWN_OPTIONS.find(o => o.key === key)
+              const rows = yearBreakdowns[key] || []
+              return (
+                <Card key={key} style={{ marginTop: 16 }}>
+                  <CardHeader
+                    title={`${opt?.label || key}: ${compareYears.join(' vs ')}`}
+                    subtitle={opt?.subtitle}
+                  />
+                  {yearCompareLoading ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 220, gap: 10, color: 'var(--slate-400)', fontSize: 13 }}>
+                      <RefreshCw size={16} className="spin" /> Loading comparison data...
+                    </div>
+                  ) : rows.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={Math.max(220, rows.length * 40)}>
+                      <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" horizontal={false} />
+                        <XAxis type="number" tick={{ fontSize: 11, fill: '#9CA3AF' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                        <YAxis type="category" dataKey="category" width={110} tick={{ fontSize: 11, fill: '#6B7280' }} tickLine={false} axisLine={false} />
+                        <Tooltip content={<ChartTooltip />} />
+                        <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                        {activeYears.map((yr, i) => <Bar key={yr} dataKey={String(yr)} fill={YEAR_COLORS[i] || '#6B7280'} radius={[0, 4, 4, 0]} maxBarSize={18} />)}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : <EmptyChart icon={BarChart2} message={`No ${opt?.label?.toLowerCase() || 'category'} data for the selected years`} />}
+                </Card>
+              )
+            })}
+          </div>
         )}
 
         <div id="an-aging" style={{ marginBottom: 16 }}>
