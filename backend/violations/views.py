@@ -1,6 +1,7 @@
 import copy
 import datetime
 import io
+from zoneinfo import ZoneInfo
 from django.http import HttpResponse
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
@@ -1683,6 +1684,239 @@ class EvidenceAssociateView(generics.UpdateAPIView):
         )
 
 
+class StatsRangeError(Exception):
+    """Bad `range` / `date_from` / `date_to` on GET /api/violations/stats/."""
+
+    def __init__(self, detail):
+        self.detail = detail
+
+
+# Inclusive day count at which the dashboard trend switches from one point
+# per day to one point per month. 92 covers a full quarter; "This year" and
+# `range=all` are longer, so they bucket by month.
+_TREND_DAY_LIMIT = 92
+_MANILA = ZoneInfo('Asia/Manila')
+_MONTH_ABBR = ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+               'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
+
+
+def parse_stats_range(params):
+    """None when the caller sent no window — the response stays exactly as before.
+
+    ``range=all`` is the all-time preset (monthly trend, archived included).
+    A date window is ``date_from`` and ``date_to`` together, YYYY-MM-DD,
+    interpreted as Asia/Manila calendar dates. ``date_to`` is inclusive.
+    """
+    raw_range = (params.get('range') or '').strip().lower()
+    raw_from = (params.get('date_from') or '').strip()
+    raw_to = (params.get('date_to') or '').strip()
+    if not raw_range and not raw_from and not raw_to:
+        return None
+    if raw_range and raw_range != 'all':
+        raise StatsRangeError('range must be "all".')
+    if raw_range == 'all' and (raw_from or raw_to):
+        raise StatsRangeError('Pass range=all on its own, or date_from and date_to, not both.')
+    if raw_range == 'all':
+        return ('all', None, None)
+    if not raw_from or not raw_to:
+        raise StatsRangeError('date_from and date_to are both required (YYYY-MM-DD).')
+    start = _parse_ymd(raw_from, 'date_from')
+    end = _parse_ymd(raw_to, 'date_to')
+    if start > end:
+        raise StatsRangeError('date_from must be on or before date_to.')
+    return ('dates', start, end)
+
+
+def _parse_ymd(value, name):
+    if len(value) != 10 or value[4] != '-' or value[7] != '-':
+        raise StatsRangeError(f'{name} must be YYYY-MM-DD.')
+    try:
+        return datetime.date.fromisoformat(value)
+    except ValueError:
+        raise StatsRangeError(f'{name} must be YYYY-MM-DD.')
+
+
+def _manila_bounds(date_from, date_to):
+    """[start, end) aware datetimes. ``date_to`` covers the whole Manila day."""
+    start = datetime.datetime.combine(date_from, datetime.time.min, tzinfo=_MANILA)
+    end = datetime.datetime.combine(
+        date_to + datetime.timedelta(days=1), datetime.time.min, tzinfo=_MANILA)
+    return start, end
+
+
+def _manila_today():
+    return datetime.datetime.now(_MANILA).date()
+
+
+def _earliest_manila_date(qs):
+    moment = qs.aggregate(m=models.Min('date_issued'))['m']
+    if moment is None:
+        return None
+    return timezone.localtime(moment, _MANILA).date()
+
+
+def _all_time_dates(user):
+    """First Manila month that has a ticket through today. Empty → this month."""
+    today = _manila_today()
+    active = Violation.objects.all()
+    if user.role == 'enforcer':
+        sources = (active.filter(enforcer=user),)
+    else:
+        sources = (active, deduped_archived())
+    found = [d for d in (_earliest_manila_date(qs) for qs in sources) if d is not None]
+    if not found:
+        return today.replace(day=1), today
+    return min(found).replace(day=1), today
+
+
+def _count_by_manila_day(qs, paid_q):
+    from django.db.models.functions import TruncDate
+
+    counts = {}
+    rows = (
+        qs.annotate(day=TruncDate('date_issued', tzinfo=_MANILA))
+          .values('day')
+          .annotate(total=Count('id'), paid=Count('id', filter=paid_q))
+    )
+    for row in rows:
+        day = row['day']
+        if day is None:
+            continue
+        if isinstance(day, datetime.datetime):
+            day = timezone.localtime(day, _MANILA).date()
+        slot = counts.setdefault(day, {'total': 0, 'paid': 0})
+        slot['total'] += row['total'] or 0
+        slot['paid'] += row['paid'] or 0
+    return counts
+
+
+def _trend_sources(user, start, end):
+    """Active rows in the window, plus deduped archived rows for office-wide roles.
+
+    Enforcers stay on their own active tickets. Archived snapshots are not
+    scoped by a user FK, so they are not mixed into an enforcer's series.
+    """
+    active = Violation.objects.filter(date_issued__gte=start, date_issued__lt=end)
+    if user.role == 'enforcer':
+        return (active.filter(enforcer=user), Q(status='paid')), None
+    archived = deduped_archived().filter(date_issued__gte=start, date_issued__lt=end)
+    return (active, Q(status='paid')), (archived, Q(settlement_status='settled'))
+
+
+def _merged_day_counts(user, start, end):
+    merged = {}
+    for source in _trend_sources(user, start, end):
+        if source is None:
+            continue
+        qs, paid_q = source
+        for day, counts in _count_by_manila_day(qs, paid_q).items():
+            slot = merged.setdefault(day, {'total': 0, 'paid': 0})
+            slot['total'] += counts['total']
+            slot['paid'] += counts['paid']
+    return merged
+
+
+def _trend_points(user, start, end, date_from, date_to, bucket):
+    """One point per day or per month, including zeros so the chart has no gaps."""
+    by_day = _merged_day_counts(user, start, end)
+    if bucket == 'day':
+        points = []
+        day = date_from
+        while day <= date_to:
+            counts = by_day.get(day, {'total': 0, 'paid': 0})
+            points.append({
+                'day': day.strftime('%a'),
+                'date': day.strftime('%m/%d'),
+                'total': counts['total'],
+                'paid': counts['paid'],
+            })
+            day += datetime.timedelta(days=1)
+        return points
+
+    points = []
+    year, month = date_from.year, date_from.month
+    while (year, month) <= (date_to.year, date_to.month):
+        total = paid = 0
+        for day, counts in by_day.items():
+            if day.year == year and day.month == month:
+                total += counts['total']
+                paid += counts['paid']
+        label = _MONTH_ABBR[month - 1]
+        points.append({
+            'day': label,
+            'date': f'{label} {year}',
+            'total': total,
+            'paid': paid,
+        })
+        month += 1
+        if month == 13:
+            month = 1
+            year += 1
+    return points
+
+
+def _window_figures(start, end):
+    """Same money rules as historical_kpis(), limited to [start, end).
+
+    pending / processing are intentionally absent: those stay current-state.
+    """
+    from decimal import Decimal
+    from django.db.models import DecimalField, Sum
+    from django.db.models.fields.json import KeyTextTransform
+    from django.db.models.functions import Cast
+
+    active = Violation.objects.filter(date_issued__gte=start, date_issued__lt=end)
+    archived = (
+        deduped_archived()
+        .filter(date_issued__gte=start, date_issued__lt=end)
+        .annotate(x_pen=Cast(KeyTextTransform('penalty_amount', 'data'),
+                             DecimalField(max_digits=12, decimal_places=2)))
+    )
+    a = active.aggregate(
+        total=Count('id'),
+        paid=Count('id', filter=Q(status='paid')),
+        pen=models.Sum('penalty_amount'),
+        col=models.Sum('penalty_amount', filter=Q(status='paid')),
+    )
+    h = archived.aggregate(
+        total=Count('id'),
+        paid=Count('id', filter=Q(settlement_status='settled')),
+        pen=Sum('x_pen'),
+        col=Sum('x_pen', filter=Q(settlement_status='settled')),
+    )
+    zero = Decimal('0')
+    return {
+        'scope': 'date_range_including_archived',
+        'total': (a['total'] or 0) + (h['total'] or 0),
+        'paid': (a['paid'] or 0) + (h['paid'] or 0),
+        'total_penalty': float((a['pen'] or zero) + (h['pen'] or zero)),
+        'total_collected': float((a['col'] or zero) + (h['col'] or zero)),
+        'active_count': a['total'] or 0,
+        'archived_count': h['total'] or 0,
+    }
+
+
+def apply_stats_range(data, user, spec):
+    """Replace the trend (and, for a date window, the admin cumulative totals).
+
+    ``range=all`` keeps the all-time historical totals and switches the trend
+    to a monthly series. A date window filters total / paid / collected and
+    the trend. Pending and enforcer headcounts are left untouched.
+    """
+    mode, date_from, date_to = spec
+    if mode == 'all':
+        date_from, date_to = _all_time_dates(user)
+        bucket = 'month'
+    else:
+        span_days = (date_to - date_from).days + 1
+        bucket = 'day' if span_days <= _TREND_DAY_LIMIT else 'month'
+    start, end = _manila_bounds(date_from, date_to)
+    data['daily_data'] = _trend_points(user, start, end, date_from, date_to, bucket)
+    data['trend_bucket'] = bucket
+    if user.role == 'admin' and mode == 'dates':
+        data['historical'].update(_window_figures(start, end))
+
+
 def historical_kpis():
     """All-time KPIs = ACTIVE table + ARCHIVED snapshots (duplicates removed).
 
@@ -1734,6 +1968,11 @@ class ViolationStatsView(APIView):
     def get(self, request):
         from django.utils import timezone
         from django.db.models import Count, Sum
+
+        try:
+            spec = parse_stats_range(request.query_params)
+        except StatsRangeError as exc:
+            return Response({'detail': exc.detail}, status=status.HTTP_400_BAD_REQUEST)
 
         # localdate(), not now().date(): settings.TIME_ZONE is Asia/Manila
         # and USE_TZ is on, so now().date() is the UTC date and "today"
@@ -1903,13 +2142,24 @@ class ViolationStatsView(APIView):
         # table) number the Staff/Enforcer screens already read.
         if request.user.role == 'admin':
             data['historical'] = historical_kpis()
-            # Checkpoint 2: archived-inclusive Violations by Type / Top Locations
-            # (all-time) and Top Enforcers (this month). ADDITIVE keys inside the
-            # Admin-only block; every top-level key above stays active-only.
+            # Checkpoint 2 panels. No date params: hist_period (default month)
+            # still decides Top Enforcers only. A range or date window wins
+            # over hist_period and uses the same Manila bounds as the totals.
             from .historical_dashboard import ENFORCER_PERIODS, historical_breakdowns
-            hist_period = request.query_params.get('hist_period', 'month')
-            data['historical'].update(historical_breakdowns(
-                hist_period if hist_period in ENFORCER_PERIODS else 'month'))
+            if spec is None:
+                hist_period = request.query_params.get('hist_period', 'month')
+                data['historical'].update(historical_breakdowns(
+                    hist_period if hist_period in ENFORCER_PERIODS else 'month'))
+            elif spec[0] == 'all':
+                data['historical'].update(historical_breakdowns('all'))
+            else:
+                data['historical'].update(historical_breakdowns(
+                    window=_manila_bounds(spec[1], spec[2])))
+
+        # No range params: daily_data stays the last 7 active days, above.
+        # range=all or date_from/date_to replaces that series (zeros filled).
+        if spec is not None:
+            apply_stats_range(data, request.user, spec)
 
         return Response(data)
 

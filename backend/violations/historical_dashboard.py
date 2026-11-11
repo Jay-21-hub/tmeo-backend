@@ -71,28 +71,49 @@ _ARCHIVED_TYPE_SQL = """
                  THEN a.data -> 'items' ELSE '[]'::jsonb END) AS it(item)
      WHERE jsonb_typeof(it.item) = 'object'
        AND NOT (a.id = ANY(%s))
+       {issued_window}
      GROUP BY 1
 """
 
 
-def _archived_type_counts(dup_pks):
-    sql = _ARCHIVED_TYPE_SQL.format(table=connection.ops.quote_name(ArchivedViolation._meta.db_table))
+def _issued_window(qs, start, end, field):
+    """Half-open range from views._manila_bounds. None means no date cut."""
+    if start is None:
+        return qs
+    return qs.filter(**{f'{field}__gte': start, f'{field}__lt': end})
+
+
+def _archived_type_counts(dup_pks, start=None, end=None):
+    window = ''
+    params = [sorted(dup_pks)]
+    if start is not None:
+        window = 'AND a.date_issued >= %s AND a.date_issued < %s'
+        params.extend([start, end])
+    sql = _ARCHIVED_TYPE_SQL.format(
+        table=connection.ops.quote_name(ArchivedViolation._meta.db_table),
+        issued_window=window,
+    )
     with connection.cursor() as cur:
-        cur.execute(sql, [sorted(dup_pks)])
+        cur.execute(sql, params)
         return cur.fetchall()
 
 
-def violations_by_type(dup_pks=None):
-    """[{'name', 'count'}] top 5 + 'Other', all-time, active + archived."""
+def violations_by_type(dup_pks=None, start=None, end=None):
+    """[{'name', 'count'}] top 5 + 'Other', active + archived.
+
+    Unit stays violation items. ``start``/``end`` are the Manila bounds from
+    ``_manila_bounds``; omitted, the panel stays all-time.
+    """
     tally = {}
+    items = _issued_window(ViolationItem.objects.all(), start, end, 'violation__date_issued')
     # ACTIVE: one row per (violation type) over every active ticket's items.
-    for row in (ViolationItem.objects.values('violation_type__name')
+    for row in (items.values('violation_type__name')
                 .annotate(c=Count('id')).order_by()):
         _merge(tally, row['violation_type__name'] or 'Unknown', row['c'])
     # ARCHIVED (deduplicated), aggregated inside PostgreSQL.
     if dup_pks is None:
         dup_pks = duplicate_archived_pks()
-    for name, n in _archived_type_counts(dup_pks):
+    for name, n in _archived_type_counts(dup_pks, start, end):
         _merge(tally, name, n)
     ranked = sorted(tally.items(), key=lambda kv: (-kv[1], kv[0]))
     out = [{'name': n, 'count': c} for n, c in ranked[:TOP_N]]
@@ -102,11 +123,16 @@ def violations_by_type(dup_pks=None):
     return out
 
 
-def top_locations(dup_pks=None):
-    """[{'area', 'count', 'trend': None}] top 5, all-time, active + archived."""
+def top_locations(dup_pks=None, start=None, end=None):
+    """[{'area', 'count', 'trend': None}] top 5, active + archived.
+
+    Locations stay on clean_location / location_key. "Perez Park" and
+    "Perez Park, Lucena" stay separate. ``start``/``end`` optional Manila bounds.
+    """
     counts = {}      # location_key -> total tickets
     spellings = {}   # location_key -> {display spelling: tickets}
     for _kind, base in _source_querysets('all', dup_pks):
+        base = _issued_window(base, start, end, 'x_date')
         # Group on the RAW stored value inside PostgreSQL (cheap: one row per
         # distinct spelling) and normalise in Python with the same
         # ``clean_location`` analytics applies, instead of running a regexp over
@@ -136,14 +162,28 @@ def _period_bounds(period, today):
     return today.replace(day=1), today
 
 
-def top_enforcers(period='month', today=None, dup_pks=None):
-    """Top 5 enforcers by tickets for the period, active + archived."""
+def top_enforcers(period='month', today=None, dup_pks=None, window=None):
+    """Top 5 enforcers by tickets for the period, active + archived.
+
+    Tickets with no enforcer are never ranked. ``window`` is the Manila
+    ``_manila_bounds`` pair and replaces ``period`` when the stats request
+    sent a date range. Omitted, ``period`` (month | year | all) is unchanged.
+    """
     today = today or timezone.localdate()
-    start, end = _period_bounds(period, today)
+    if window is not None:
+        start, end = window
+
+        def narrow(qs):
+            return _issued_window(qs, start, end, 'x_date')
+    else:
+        start, end = _period_bounds(period, today)
+
+        def narrow(qs):
+            return qs if start is None else _in_period(qs, start, end)
 
     act_rows, arch_rows = [], []
     for kind, base in _source_querysets('all', dup_pks):
-        qs = base if start is None else _in_period(base, start, end)
+        qs = narrow(base)
         if kind == 'active':
             act_rows += list(qs.filter(enforcer__isnull=False)
                              .values('enforcer__id', 'x_enforcer')
@@ -229,14 +269,28 @@ def top_enforcers(period='month', today=None, dup_pks=None):
     return people
 
 
-def historical_breakdowns(enforcer_period='month', today=None):
-    """The additive keys merged into ``stats['historical']`` for Admins."""
+def historical_breakdowns(enforcer_period='month', today=None, window=None):
+    """The additive keys merged into ``stats['historical']`` for Admins.
+
+    ``window`` is ``(start, end)`` from ``views._manila_bounds``. When it is
+    set, all three panels use that half-open range and ``enforcer_period``
+    is ignored. When it is omitted, type/locations stay all-time and
+    top enforcers follow ``enforcer_period`` (default month).
+    """
     today = today or timezone.localdate()
     if enforcer_period not in ENFORCER_PERIODS:
         enforcer_period = 'month'
+    dup_pks = duplicate_archived_pks()      # computed ONCE, shared by all three panels
+    if window is not None:
+        start, end = window
+        return {
+            'type_data': violations_by_type(dup_pks, start, end),
+            'hotspots': top_locations(dup_pks, start, end),
+            'top_enforcers': top_enforcers('all', today, dup_pks, window=(start, end)),
+            'period': _window_period(start, end),
+        }
     start, end = _period_bounds(enforcer_period, today)
     label = {'month': LABEL_MONTH, 'year': LABEL_YEAR, 'all': LABEL_ALL_TIME}[enforcer_period]
-    dup_pks = duplicate_archived_pks()      # computed ONCE, shared by all three panels
     return {
         'type_data': violations_by_type(dup_pks),
         'hotspots': top_locations(dup_pks),
@@ -251,4 +305,19 @@ def historical_breakdowns(enforcer_period='month', today=None):
                 'timezone': 'Asia/Manila',
             },
         },
+    }
+
+
+def _window_period(start, end):
+    """Metadata for a _manila_bounds window. ``end`` is the next Manila midnight."""
+    block = {
+        'scope': 'date_range', 'includes_archived': True,
+        'label': 'Selected period · includes archived',
+        'start': start.isoformat(), 'end': end.isoformat(),
+        'timezone': 'Asia/Manila',
+    }
+    return {
+        'type_data': {**block, 'unit': 'violation_items'},
+        'hotspots': {**block, 'unit': 'tickets'},
+        'top_enforcers': {**block, 'unit': 'tickets'},
     }
