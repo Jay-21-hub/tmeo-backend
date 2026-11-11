@@ -13,6 +13,7 @@ vi.mock('recharts', () => {
 })
 
 import DashboardHome from './DashboardHome'
+import { periodParams } from '../../../components/dashboard/periodRange'
 
 const ACTIVE = {
   total: 3, pending: 1, paid: 1, total_collected: 500, active_enforcers: 2, on_duty_enforcers: 1, daily_data: [],
@@ -53,8 +54,8 @@ describe('Admin dashboard - archived-inclusive panels', () => {
     expect(screen.queryByText('Active-only type')).toBeNull()
     expect(screen.queryByText('Active-only place')).toBeNull()
     expect(screen.queryByText('Active Only Person')).toBeNull()
-    expect(screen.getAllByText('Cumulative · includes archived')).toHaveLength(2)        // Type + Locations
-    expect(screen.getAllByText('This month · includes archived')).toHaveLength(1)        // Top Enforcers
+    expect(screen.getByText('This month · incl. archived · violation items')).toBeTruthy()
+    expect(screen.getAllByText('This month · incl. archived')).toHaveLength(5)
     // the old over-claiming subtitles are gone
     expect(screen.queryByText('All recorded violations')).toBeNull()
     expect(screen.queryByText('Where most OVRs are issued')).toBeNull()
@@ -68,12 +69,15 @@ describe('Admin dashboard - archived-inclusive panels', () => {
     expect(await screen.findByText('47')).toBeTruthy()          // 40 + 7 ("Other")
   })
 
-  it('uses the label the server sends (e.g. another hist_period)', async () => {
+  it('shows the page period on the panels even when the server sends another hist_period label', async () => {
     const h = { ...HISTORICAL, period: { ...HISTORICAL.period,
       top_enforcers: { scope: 'year', includes_archived: true, label: 'This year · includes archived' } } }
     mockApi({ ...ACTIVE, historical: h })
     renderIt()
-    expect(await screen.findByText('This year · includes archived')).toBeTruthy()
+    expect(await screen.findByText('Archived Incl Person')).toBeTruthy()
+    expect(screen.getAllByText('This month · incl. archived')).toHaveLength(5)
+    expect(screen.getByText('This month · incl. archived · violation items')).toBeTruthy()
+    expect(screen.queryByText('This year · includes archived')).toBeNull()
   })
 
   it('falls back per panel to the active-only lists, honestly labelled, when there is no historical block', async () => {
@@ -94,7 +98,7 @@ describe('Admin dashboard - archived-inclusive panels', () => {
     renderIt()
     expect(await screen.findByText('Active-only type')).toBeTruthy()
     expect(screen.queryByText('Cumulative · includes archived')).toBeNull()
-    expect(screen.getAllByText('All-time, incl. archived')).toHaveLength(3)   // KPI cards keep their own label
+    expect(screen.getAllByText('This month · incl. archived')).toHaveLength(3)
   })
 
   it('an empty archived-inclusive list shows the empty state, not the active rows', async () => {
@@ -106,12 +110,13 @@ describe('Admin dashboard - archived-inclusive panels', () => {
     expect(screen.queryByText('Active-only type')).toBeNull()
   })
 
-  it('does not add query parameters to the stats request (API contract unchanged)', async () => {
+  it('sends this month as date_from and date_to, and does not send hist_period', async () => {
     mockApi({ ...ACTIVE, historical: HISTORICAL })
     renderIt()
     await screen.findByText('Archived-incl type')
     const statsCall = get.mock.calls.find(([u]) => String(u).includes('stats'))
-    expect(statsCall).toHaveLength(1)                                 // url only, no params object
+    expect(statsCall[1].params).toEqual(periodParams('month', new Date()))
+    expect(statsCall[1].params).not.toHaveProperty('hist_period')
     expect(String(statsCall[0])).not.toContain('hist_period')
   })
 })

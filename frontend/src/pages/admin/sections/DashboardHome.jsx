@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts'
@@ -18,17 +18,20 @@ import { formatDateParts, formatPesoCompact, violationLabel } from '../../../com
 import {
   pickPanel, LABEL_CUMULATIVE, LABEL_THIS_MONTH, LABEL_ACTIVE_ONLY, LABEL_ACTIVE_THIS_MONTH,
 } from '../../../components/dashboard/historicalPanels'
+import PeriodFilter from '../../../components/dashboard/PeriodFilter'
+import PeriodEmpty from '../../../components/dashboard/PeriodEmpty'
+import { DEFAULT_PRESET, PERIOD_PRESETS, periodParams } from '../../../components/dashboard/periodRange'
 
 /**
  * Admin dashboard. Every figure comes from GET /api/violations/stats/ and
- * GET /api/violations/ (latest 5). The three headline KPIs (Total OVR, Revenue, Paid)
- * are CUMULATIVE — active + archived, from stats.historical (Admin-only block);
- * Pending Assessment is OPERATIONAL (active cases only), because pending records
- * are never archived. If the backend does not send `historical`, the cards fall
- * back to the active-table figures and are labelled accordingly. Violations by Type, Top Locations
- * (cumulative) and Top Enforcers (this month) also read stats.historical (active + archived,
- * duplicates already removed by the backend); each panel falls back on its own to the
- * active-only top-level list, labelled "archive not included", so a label never over-claims.
+ * GET /api/violations/ (latest 5, not period-filtered). The period state on
+ * this page is the only source of the stats/ query: This month by default,
+ * All time as range=all, otherwise date_from and date_to.
+ * Total Violations, Total Collected, and Paid Violations read stats.historical
+ * (active + archived, by date_issued). Pending Violations and Active Enforcers
+ * stay current-state. Violations by Type, Top Locations, and Top Enforcers
+ * come from the same stats/ response. Their window is this page's period
+ * (the request params), not hist_period. By Type counts violation items.
  * The Audit Trail has its own page; the
  * dashboard no longer reads audit logs. Nothing is sample data: a section with no
  * data shows an empty state, and a comparison that can't be computed (no
@@ -42,46 +45,101 @@ function Empty({ text }) {
   return <div className="dash-empty"><Inbox size={22} aria-hidden="true" style={{ display: 'block', margin: '0 auto 8px' }} />{text}</div>
 }
 
+const isAbort = (err) => err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError'
+
 export default function DashboardHome({ user, setPage }) {
+  const [preset, setPreset] = useState(DEFAULT_PRESET)
+  const [applied, setApplied] = useState(() => periodParams(DEFAULT_PRESET, new Date()))
+  const [reloadKey, setReloadKey] = useState(0)
   const [stats, setStats] = useState(null)
   const [recent, setRecent] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [statsLoading, setStatsLoading] = useState(true)
+  const [recentLoading, setRecentLoading] = useState(true)
   const [error, setError] = useState('')
+  const requestId = useRef(0)
 
-  const load = useCallback(() => (
-    Promise.all([
-      api.get(API.VIOLATION_STATS),
-      api.get(API.VIOLATIONS, { params: { page_size: 5 } }),
-    ])
-      .then(([s, r]) => {
-        setStats(s.data)
-        setRecent(Array.isArray(r.data) ? r.data : (r.data.results || []))
-        setError('')
-      })
-      .catch(() => setError('Could not load the dashboard. Check your connection and try again.'))
-      .finally(() => setLoading(false))
-  ), [])
+  const onPeriod = (params, id) => {
+    setPreset(id)
+    setApplied(params)
+  }
+
+  const showThisYear = () => onPeriod(periodParams('year', new Date()), 'year')
 
   useEffect(() => {
-    load()
-    window.addEventListener('violation-submitted', load)
-    return () => window.removeEventListener('violation-submitted', load)
-  }, [load])
+    const id = ++requestId.current
+    const ctrl = new AbortController()
+    setStatsLoading(true)
+    setError('')
+    setStats(null)
+    api.get(API.VIOLATION_STATS, { params: applied, signal: ctrl.signal })
+      .then((res) => {
+        if (id !== requestId.current) return
+        setStats(res.data)
+        setStatsLoading(false)
+      })
+      .catch((err) => {
+        if (id !== requestId.current || isAbort(err)) return
+        setStats(null)
+        setError('Could not load the dashboard. Check your connection and try again.')
+        setStatsLoading(false)
+      })
+    return () => {
+      ctrl.abort()
+    }
+  }, [applied, reloadKey])
 
-  const retry = () => { setLoading(true); setError(''); load() }
+  useEffect(() => {
+    let cancel = false
+    api.get(API.VIOLATIONS, { params: { page_size: 5 } })
+      .then((res) => {
+        if (cancel) return
+        setRecent(Array.isArray(res.data) ? res.data : (res.data.results || []))
+      })
+      .catch(() => {
+        if (!cancel) setRecent([])
+      })
+      .finally(() => {
+        if (!cancel) setRecentLoading(false)
+      })
+    return () => { cancel = true }
+  }, [reloadKey])
 
-  const n = (v) => (loading ? '—' : Number(v ?? 0).toLocaleString('en-PH'))
+  useEffect(() => {
+    const reload = () => setReloadKey((k) => k + 1)
+    window.addEventListener('violation-submitted', reload)
+    return () => window.removeEventListener('violation-submitted', reload)
+  }, [])
 
-  // Cumulative (all-time, incl. archived) when the backend provides it.
+  const retry = () => setReloadKey((k) => k + 1)
+
   const hist = stats?.historical || null
-  const allTimeSub = hist ? 'All-time, incl. archived' : 'Active records only'
+  const presetLabel = PERIOD_PRESETS.find((p) => p.id === preset)?.label || 'This month'
+  const periodSub = hist ? `${presetLabel} · incl. archived` : 'Active records only'
+  const noPeriodRows = Boolean(hist) && Number(hist.total) === 0
+  const figure = (v) => {
+    if (statsLoading || error || !stats) return '—'
+    if (noPeriodRows) return '—'
+    return Number(v ?? 0).toLocaleString('en-PH')
+  }
+  const currentFigure = (v) => (
+    statsLoading || error || !stats ? '—' : Number(v ?? 0).toLocaleString('en-PH')
+  )
+  const money = (amount) => {
+    if (statsLoading || error || !stats || noPeriodRows) return '—'
+    return formatPesoCompact(amount)
+  }
 
   const daily = stats?.daily_data || []
-  const hasTrend = daily.some(d => d.total > 0)
+  const hasTrend = daily.some(d => d.total > 0 || d.paid > 0)
+  const trendSubtitle = stats?.trend_bucket === 'month' ? 'OVRs issued per month' : 'OVRs issued per day'
 
   const typePanel = pickPanel(hist, 'type_data', stats?.type_data, LABEL_CUMULATIVE, LABEL_ACTIVE_ONLY)
   const locPanel = pickPanel(hist, 'hotspots', stats?.hotspots, LABEL_CUMULATIVE, LABEL_ACTIVE_ONLY)
   const enfPanel = pickPanel(hist, 'top_enforcers', stats?.top_enforcers, LABEL_THIS_MONTH, LABEL_ACTIVE_THIS_MONTH)
+  const periodPanel = `${presetLabel} · incl. archived`
+  const typeSubtitle = typePanel.includesArchived ? `${periodPanel} · violation items` : typePanel.label
+  const locSubtitle = locPanel.includesArchived ? periodPanel : locPanel.label
+  const enfSubtitle = enfPanel.includesArchived ? periodPanel : enfPanel.label
   const types = typePanel.rows
   const typeTotal = types.reduce((sum, t) => sum + t.count, 0)
   const hotspots = locPanel.rows
@@ -91,30 +149,34 @@ export default function DashboardHome({ user, setPage }) {
     <Dash>
       <GreetingBar user={user} fallbackName="Admin" subtitle="Here’s an overview of the TMEO traffic management system." />
 
+      <PeriodFilter value={preset} onChange={onPeriod} />
+
       {error && <div className="card"><ErrorState message={error} onRetry={retry} /></div>}
 
       <div className="dash-kpis dash-kpis--5">
-        <KpiCard loading={loading} icon={FileText} tone="blue" label="Total OVR Issued"
-          value={n(hist ? hist.total : stats?.total)} sub={allTimeSub} />
-        <KpiCard loading={loading} icon={Banknote} tone="orange" label="Total Revenue (Fines)"
-          value={loading ? '—' : formatPesoCompact(hist ? hist.total_collected : stats?.total_collected)} sub={allTimeSub} />
-        <KpiCard loading={loading} icon={Clock} tone="orange" label="Pending Assessment" value={n(stats?.pending)}
+        <KpiCard loading={statsLoading} icon={FileText} tone="blue" label="Total Violations"
+          value={figure(hist ? hist.total : stats?.total)} sub={periodSub} />
+        <KpiCard loading={statsLoading} icon={Banknote} tone="orange" label="Total Collected"
+          value={money(hist ? hist.total_collected : stats?.total_collected)} sub={periodSub} />
+        <KpiCard loading={statsLoading} icon={Clock} tone="orange" label="Pending Violations" value={currentFigure(stats?.pending)}
           sub="Active cases only" />
-        <KpiCard loading={loading} icon={CheckCircle} tone="green" label="Paid Tickets"
-          value={n(hist ? hist.paid : stats?.paid)} sub={allTimeSub} />
-        <KpiCard loading={loading} icon={Users} tone="purple" label="Active Enforcers" value={n(stats?.active_enforcers)}
-          sub={`${n(stats?.on_duty_enforcers)} on duty now`} />
+        <KpiCard loading={statsLoading} icon={CheckCircle} tone="green" label="Paid Violations"
+          value={figure(hist ? hist.paid : stats?.paid)} sub={periodSub} />
+        <KpiCard loading={statsLoading} icon={Users} tone="purple" label="Active Enforcers" value={currentFigure(stats?.active_enforcers)}
+          sub={`${currentFigure(stats?.on_duty_enforcers)} on duty now`} />
       </div>
 
       <div className="dash-row dash-row--trio">
-        <Panel icon={BarChart3} title="Violations Trend" subtitle="OVRs issued per day"
+        <Panel icon={BarChart3} title="Violations Trend" subtitle={trendSubtitle}
           action={(
             <div className="dash-legend-inline" aria-hidden="true">
               <span><i style={{ background: colors.blue[600] }} />Total violations</span>
               <span><i style={{ background: colors.success[500] }} />Paid</span>
             </div>
           )}>
-          {loading ? <RowSkeleton rows={5} /> : !hasTrend ? <Empty text="No violations in the last 7 days." /> : (
+          {statsLoading ? <RowSkeleton rows={5} /> : error ? null : !hasTrend ? (
+            <PeriodEmpty onShowThisYear={showThisYear} />
+          ) : (
             <ResponsiveContainer width="100%" height={230}>
               <AreaChart data={daily} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
                 <defs>
@@ -136,8 +198,8 @@ export default function DashboardHome({ user, setPage }) {
           )}
         </Panel>
 
-        <Panel icon={PieIcon} title="Violations by Type" subtitle={typePanel.label}>
-          {loading ? <RowSkeleton rows={5} /> : types.length === 0 ? <Empty text="No violations recorded yet." /> : (
+        <Panel icon={PieIcon} title="Violations by Type" subtitle={typeSubtitle}>
+          {statsLoading ? <RowSkeleton rows={5} /> : types.length === 0 ? <Empty text="No violations recorded yet." /> : (
             <div className="dash-donut">
               <div className="dash-donut-chart">
                 <ResponsiveContainer width="100%" height="100%">
@@ -164,9 +226,9 @@ export default function DashboardHome({ user, setPage }) {
           )}
         </Panel>
 
-        <Panel icon={MapPin} title="Top Locations" subtitle={locPanel.label}
+        <Panel icon={MapPin} title="Top Locations" subtitle={locSubtitle}
           action={<PanelLink onClick={() => setPage('gis')}>View map</PanelLink>}>
-          {loading ? <RowSkeleton rows={5} /> : hotspots.length === 0 ? <Empty text="No location data yet." /> : (
+          {statsLoading ? <RowSkeleton rows={5} /> : hotspots.length === 0 ? <Empty text="No location data yet." /> : (
             <ol className="dash-list">
               {hotspots.map((h, i) => (
                 <li key={h.area}>
@@ -183,7 +245,7 @@ export default function DashboardHome({ user, setPage }) {
 
       <div className="dash-row dash-row--duo">
         <Panel icon={TrafficCone} title="Recent OVRs" flush action={<PanelLink onClick={() => setPage('violations')}>View all</PanelLink>}>
-          {loading ? <RowSkeleton rows={5} /> : recent.length === 0 ? <Empty text="No OVRs have been issued yet." /> : (
+          {recentLoading ? <RowSkeleton rows={5} /> : recent.length === 0 ? <Empty text="No OVRs have been issued yet." /> : (
             <>
               <div className="dash-table-wrap">
                 <table className="dash-table">
@@ -242,8 +304,8 @@ export default function DashboardHome({ user, setPage }) {
           )}
         </Panel>
 
-        <Panel icon={Trophy} title="Top Performing Enforcers" subtitle={enfPanel.label}>
-          {loading ? <RowSkeleton rows={5} /> : topEnforcers.length === 0 ? <Empty text="No OVRs issued this month yet." /> : (
+        <Panel icon={Trophy} title="Top Performing Enforcers" subtitle={enfSubtitle}>
+          {statsLoading ? <RowSkeleton rows={5} /> : topEnforcers.length === 0 ? <Empty text="No OVRs issued this month yet." /> : (
             <ol className="dash-list">
               {topEnforcers.map((e, i) => (
                 <li key={e.id ?? i}>
