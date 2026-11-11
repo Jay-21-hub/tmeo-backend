@@ -201,6 +201,20 @@ def _in_period(qs, start, end):
     return qs.filter(x_date__date__gte=start, x_date__date__lte=end)
 
 
+def _window_cut(qs, start, end, bounds):
+    """No bounds: the existing inclusive calendar filter.
+
+    A ``(start, end)`` pair is the half-open result of ``views._manila_bounds``.
+    ``'all'`` applies no date cut.
+    """
+    if bounds == 'all':
+        return qs
+    if bounds is None:
+        return _in_period(qs, start, end)
+    lo, hi = bounds
+    return qs.filter(x_date__gte=lo, x_date__lt=hi)
+
+
 def _merge(counter, key, n):
     counter[key] = counter.get(key, 0) + n
 
@@ -285,11 +299,11 @@ def _period_bounds(period, today):
     return today.replace(day=1), today
 
 
-def _totals(sources, f, start, end):
+def _totals(sources, f, start, end, bounds=None):
     tot = {'total': 0, 'total_penalty': Decimal(0), 'total_collected': Decimal(0),
            'pending': 0, 'processing': 0, 'paid': 0}
     for kind, base in sources:
-        qs = _in_period(_apply_filters(kind, base, f), start, end)
+        qs = _window_cut(_apply_filters(kind, base, f), start, end, bounds)
         a = qs.aggregate(
             total=Count('id'), pen=Sum('x_penalty'),
             col=Sum('x_penalty', filter=Q(x_status='paid')),
@@ -312,27 +326,54 @@ def _pct_change(curr, prev):
     return round(((curr - prev) / prev) * 100, 1)
 
 
-def compute_analytics(params):
+def compute_analytics(params, spec=None):
+    """``spec`` is the result of ``views.parse_stats_range``.
+
+    None keeps ``period`` exactly as before. ``range=all`` or a date pair
+    replaces that window. ``period`` does not override them.
+    """
     today = timezone.localdate()
     current_year, prev_year = today.year, today.year - 1
     period = params.get('period', 'month')
     scope = 'active' if params.get('scope') == 'active' else 'all'
     f = Filters(params)
-    start, end = _period_bounds(period, today)
+    bounds = None
+    bucket = None
+    if spec is not None:
+        from violations.views import _TREND_DAY_LIMIT, _earliest_manila_date, _manila_bounds
+        if spec[0] == 'all':
+            bounds = 'all'
+            bucket = 'month'
+            sources = _source_querysets(scope)
+            prepared = [(k, _apply_filters(k, qs, f)) for k, qs in sources]
+            found = [d for d in (_earliest_manila_date(qs) for _k, qs in prepared) if d is not None]
+            start = min(found).replace(day=1) if found else today.replace(day=1)
+            end = today
+            scoped = prepared
+        else:
+            start, end = spec[1], spec[2]
+            bounds = _manila_bounds(start, end)
+            span = (end - start).days + 1
+            bucket = 'day' if span <= _TREND_DAY_LIMIT else 'month'
+            sources = _source_querysets(scope)
+            scoped = [(k, _window_cut(_apply_filters(k, qs, f), start, end, bounds))
+                      for k, qs in sources]
+    else:
+        start, end = _period_bounds(period, today)
+        sources = _source_querysets(scope)
+        scoped = [(k, _window_cut(_apply_filters(k, qs, f), start, end, None))
+                  for k, qs in sources]
     delta = (end - start).days + 1
 
-    sources = _source_querysets(scope)
-    scoped = [(k, _in_period(_apply_filters(k, qs, f), start, end)) for k, qs in sources]
-
     # ---- totals / status / comparison ---------------------------------
-    totals = _totals(sources, f, start, end)
+    totals = _totals(sources, f, start, end, bounds)
     by_status = {s: totals[s] for s in ('pending', 'processing', 'paid')}
     # Status chart: every OTHER filter applies, the status filter itself does not,
     # so the donut keeps showing all statuses and the selected one can be highlighted.
     if f.status:
         f_any_status = copy.copy(f)
         f_any_status.status = ''
-        status_totals = _totals(sources, f_any_status, start, end)
+        status_totals = _totals(sources, f_any_status, start, end, bounds)
     else:
         status_totals = totals
     status_distribution = {
@@ -342,19 +383,31 @@ def compute_analytics(params):
         'selected': f.status or None,
         'basis': 'all other filters applied; the status filter itself is not applied here',
     }
-    prev_end = start - datetime.timedelta(days=1)
-    prev_start = prev_end - datetime.timedelta(days=delta - 1)
-    prev = _totals(sources, f, prev_start, prev_end)
-    labels = {'today': 'vs yesterday', 'week': 'vs last week',
-              'month': 'vs previous month', 'year': 'vs previous year'}
-    comparison = {
-        'label': labels.get(period, 'vs previous period'),
-        'total_pct': _pct_change(totals['total'], prev['total']),
-        'total_penalty_pct': _pct_change(totals['total_penalty'], prev['total_penalty']),
-        'total_collected_pct': _pct_change(totals['total_collected'], prev['total_collected']),
-        'pending_pct': _pct_change(by_status['pending'], prev['pending']),
-        'paid_pct': _pct_change(by_status['paid'], prev['paid']),
-    }
+    if bounds == 'all':
+        comparison = {
+            'label': None, 'total_pct': None, 'total_penalty_pct': None,
+            'total_collected_pct': None, 'pending_pct': None, 'paid_pct': None,
+        }
+    else:
+        prev_end = start - datetime.timedelta(days=1)
+        prev_start = prev_end - datetime.timedelta(days=delta - 1)
+        if bounds is None:
+            prev = _totals(sources, f, prev_start, prev_end)
+            labels = {'today': 'vs yesterday', 'week': 'vs last week',
+                      'month': 'vs previous month', 'year': 'vs previous year'}
+            compare_label = labels.get(period, 'vs previous period')
+        else:
+            from violations.views import _manila_bounds
+            prev = _totals(sources, f, prev_start, prev_end, _manila_bounds(prev_start, prev_end))
+            compare_label = 'vs previous period'
+        comparison = {
+            'label': compare_label,
+            'total_pct': _pct_change(totals['total'], prev['total']),
+            'total_penalty_pct': _pct_change(totals['total_penalty'], prev['total_penalty']),
+            'total_collected_pct': _pct_change(totals['total_collected'], prev['total_collected']),
+            'pending_pct': _pct_change(by_status['pending'], prev['pending']),
+            'paid_pct': _pct_change(by_status['paid'], prev['paid']),
+        }
     total_penalty, total_collected = _f(totals['total_penalty']), _f(totals['total_collected'])
     collection_overview = {
         'total_penalty': total_penalty,
@@ -367,14 +420,38 @@ def compute_analytics(params):
 
     # ---- per-day trend --------------------------------------------------
     day_counts = {}
+    trunc_kw = {}
+    if spec is not None:
+        from zoneinfo import ZoneInfo
+        trunc_kw['tzinfo'] = ZoneInfo('Asia/Manila')
     for kind, qs in scoped:
-        for r in qs.annotate(day=TruncDate('x_date')).values('day').annotate(c=Count('id')):
-            _merge(day_counts, r['day'], r['c'])
-    by_day = []
-    for i in range(delta - 1, -1, -1):
-        d = end - datetime.timedelta(days=i)
-        by_day.append({'date': d.strftime('%m/%d'), 'day': d.strftime('%a'),
-                       'iso_date': d.isoformat(), 'count': day_counts.get(d, 0)})
+        for r in qs.annotate(day=TruncDate('x_date', **trunc_kw)).values('day').annotate(c=Count('id')):
+            day = r['day']
+            if isinstance(day, datetime.datetime):
+                day = day.date()
+            _merge(day_counts, day, r['c'])
+    if bucket == 'month':
+        from violations.views import _MONTH_ABBR
+        by_day = []
+        year, month = start.year, start.month
+        while (year, month) <= (end.year, end.month):
+            count = sum(n for day, n in day_counts.items()
+                        if day is not None and day.year == year and day.month == month)
+            label = _MONTH_ABBR[month - 1]
+            by_day.append({
+                'date': f'{label} {year}', 'day': label,
+                'iso_date': datetime.date(year, month, 1).isoformat(), 'count': count,
+            })
+            month += 1
+            if month == 13:
+                month = 1
+                year += 1
+    else:
+        by_day = []
+        for i in range(delta - 1, -1, -1):
+            d = end - datetime.timedelta(days=i)
+            by_day.append({'date': d.strftime('%m/%d'), 'day': d.strftime('%a'),
+                           'iso_date': d.isoformat(), 'count': day_counts.get(d, 0)})
 
     # ---- hour / weekday / heatmap ------------------------------------
     hw = {}
@@ -715,6 +792,7 @@ def compute_analytics(params):
         'prev_year': prev_year,
         'available_years': sorted(years),
         'period': period,
+        **({'trend_bucket': bucket} if bucket else {}),
         'collection_overview': collection_overview,
         'map_points': map_points,
         'filter_options': filter_options,

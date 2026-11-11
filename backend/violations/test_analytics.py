@@ -205,3 +205,7 @@ class AnalyticsAggregationTests(APITestCase):
             self.assertIn(k, d)
         self.assertEqual(d['by_category'][0]['violation_type__name'], 'No Helmet')
         self.assertEqual(d['by_category'][0]['count'], 7)
+
+
+from violations.test_analytics_window import bind_window_tests
+bind_window_tests(AnalyticsAggregationTests)

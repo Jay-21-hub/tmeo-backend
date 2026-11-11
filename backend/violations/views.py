@@ -2175,7 +2175,11 @@ class AnalyticsSummaryView(APIView):
 
     def get(self, request):
         from .analytics import compute_analytics
-        return Response(compute_analytics(request.query_params))
+        try:
+            spec = parse_stats_range(request.query_params)
+        except StatsRangeError as exc:
+            return Response({'detail': exc.detail}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(compute_analytics(request.query_params, spec))
 
 
 # ─── Year Comparison View ─────────────────────────────────────────────────────
