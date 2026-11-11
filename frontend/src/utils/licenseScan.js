@@ -68,7 +68,7 @@ async function resolveDrawable(source) {
  * side is at most `maxSide`, keeping the aspect ratio. Returns the raw
  * base64 JPEG payload (no `data:` prefix) for the scan request.
  */
-export async function resizeImageToJpegBase64(source, { maxSide = 1600, quality = 0.85 } = {}) {
+export async function resizeImageToJpegBase64(source, { maxSide = 1280, quality = 0.85 } = {}) {
   const image = await resolveDrawable(source)
   try {
     if (!image.width || !image.height) {
