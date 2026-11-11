@@ -57,7 +57,7 @@ export const REPORT_TYPES = [
   { id: 'monthly', title: 'Monthly Violations', desc: 'Tickets, paid/unpaid split and penalties by month.', icon: BarChart3, accent: '#7c3aed', iconBg: '#f5f3ff', filters: ['status'] },
   { id: 'by_type', title: 'Violations by Type', desc: 'Ticket counts and item-level fines per violation type.', icon: Tag, accent: 'var(--warning-600)', iconBg: 'var(--warning-50)', filters: ['status', 'category', 'vehicle_type'] },
   { id: 'enforcer', title: 'Enforcer Activity', desc: 'Tickets issued per enforcer. Imports and walk-ins excluded.', icon: UserCheck, accent: 'var(--success-600)', iconBg: 'var(--success-50)', filters: ['status'] },
-  { id: 'outstanding', title: 'Outstanding Penalties', desc: 'Unpaid tickets with age in days and aging buckets.', icon: Clock, accent: 'var(--danger-600)', iconBg: 'var(--danger-50)', filters: ['vehicle_type'] },
+  { id: 'outstanding', title: 'Outstanding Penalties', desc: 'Unpaid tickets with age in days and age ranges.', icon: Clock, accent: 'var(--danger-600)', iconBg: 'var(--danger-50)', filters: ['vehicle_type'] },
   { id: 'location', title: 'Violations by Location', desc: 'Where violations occur, with duplicate spellings combined.', icon: MapPin, accent: 'var(--blue-600)', iconBg: 'var(--blue-50)', filters: ['status'] },
   { id: 'vehicle_type', title: 'Violations by Vehicle Type', desc: 'Tickets and penalties by vehicle type.', icon: Truck, accent: '#7c3aed', iconBg: '#f5f3ff', filters: ['status'] },
 ]
