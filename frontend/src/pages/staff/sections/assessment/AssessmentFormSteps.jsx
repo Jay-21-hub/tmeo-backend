@@ -18,7 +18,7 @@ const FIELD_LABELS = {
 }
 
 // INTERNAL record options only — never printed on the Assessment Form.
-// (Unchanged from the previous implementation.)
+// (Saved values are unchanged from the previous implementation.)
 const CONFISCATED_DOCUMENT_OPTIONS = [
   { value: 'drivers_license', label: "Driver's License" },
   { value: 'bir',             label: 'BIR-related ID/document' },
@@ -188,44 +188,68 @@ function RepeatViolatorNotice({ repeatInfo, onViewTicket, viewingId }) {
 }
 
 /* ── Confiscation of Documents (Step 1) ─────────────────────────────────
-   Logic identical to the previous ConfiscationSection. First decision is
-   Confiscated / Not Confiscated; nothing else is shown for Not Confiscated.
-   Driver's License reuses the single License Number field; every other
-   type uses Document / Reference Number. `statusLocked` = Enforcer OVR
-   whose decision is read-only (Staff still completes document details). */
+   Three choices (stored in license_status):
+     Not Confiscated  -> nothing else is shown.
+     Confiscated      -> the driver's license is held in TMEO custody. Only
+                         the License Number is asked; the saved document
+                         type is always 'drivers_license'. Only these
+                         records enter the Confiscated Licenses module.
+     Other Documents  -> TMEO only records the violator's information from
+                         a valid ID. Nothing is held in custody, so these
+                         records never enter the Confiscated Licenses module.
+                         Staff picks the ID from the existing list and enters
+                         its number ('Others' also needs a name).
+   `statusLocked` = Enforcer OVR whose decision is read-only (Staff still
+   completes the document details). */
 function ConfiscationSection({ form, errors, onChange, statusLocked, licenseLocked, onLookupReset, onLookup }) {
-  const confiscated = form.license_status === 'confiscated'
+  const status = form.license_status
+  const confiscated = status === 'confiscated'
+  const otherDocs = status === 'other_documents'
   const type = form.confiscated_document_type
-  const isLicense = type === 'drivers_license'
   const isOthers = type === 'others'
+  const otherOptions = CONFISCATED_DOCUMENT_OPTIONS.filter(o => o.value !== 'drivers_license')
+  const statusLabel = confiscated ? 'Confiscated' : otherDocs ? 'Other Documents' : 'Not Confiscated'
+
+  // Switching the choice resets the document details so nothing stale from
+  // the previous choice is ever saved.
+  const handleStatus = (value) => {
+    onChange('license_status', value)
+    onChange('confiscated_document_name', '')
+    onChange('confiscated_document_number', '')
+    if (value === 'confiscated') onChange('confiscated_document_type', 'drivers_license')
+    else onChange('confiscated_document_type', '')
+  }
+
   return (
     <div className="af-section">
-      <SectionHead icon={FileWarning} title="Confiscation of Documents" sub="Record whether a document was confiscated at the time of the violation." />
+      <SectionHead icon={FileWarning} title="Confiscation of Documents" sub="Record whether a document was confiscated or only its information was taken." />
       <div className="af-grid">
         <div className="af-s6">
           {statusLocked ? (
-            <LockedField id="license_status" label="Confiscation" value={confiscated ? 'Confiscated' : 'Not Confiscated'} />
+            <LockedField id="license_status" label="Confiscation" value={statusLabel} />
           ) : (
-            <Field label="Confiscation" htmlFor="license_status">
-              <select id="license_status" className="select" value={form.license_status} onChange={e => onChange('license_status', e.target.value)}>
+            <Field label="Confiscation" htmlFor="license_status"
+              helper={confiscated ? "The driver's license is held in TMEO custody." : otherDocs ? 'Only the ID information is recorded. Nothing is held in custody.' : undefined}>
+              <select id="license_status" className="select" value={status} onChange={e => handleStatus(e.target.value)}>
                 <option value="not_confiscated">Not Confiscated</option>
                 <option value="confiscated">Confiscated</option>
+                <option value="other_documents">Other Documents</option>
               </select>
             </Field>
           )}
         </div>
-        {confiscated && (
+        {otherDocs && (
           <div className="af-s6 af-reveal">
-            <Field label="Type of Document" required error={errors.confiscated_document_type} htmlFor="confiscated_document_type">
+            <Field label="Valid ID / Document" required error={errors.confiscated_document_type} htmlFor="confiscated_document_type">
               <select id="confiscated_document_type" className={`select ${errors.confiscated_document_type ? 'input-error' : ''}`}
                 value={type} onChange={e => onChange('confiscated_document_type', e.target.value)}>
-                <option value="">Select document type…</option>
-                {CONFISCATED_DOCUMENT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                <option value="">Select valid ID…</option>
+                {otherOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </Field>
           </div>
         )}
-        {confiscated && isOthers && (
+        {otherDocs && isOthers && (
           <div className="af-s6 af-reveal">
             <Field label="Document Type / Name" required error={errors.confiscated_document_name} htmlFor="confiscated_document_name">
               <input id="confiscated_document_name" className={`input ${errors.confiscated_document_name ? 'input-error' : ''}`}
@@ -234,7 +258,7 @@ function ConfiscationSection({ form, errors, onChange, statusLocked, licenseLock
             </Field>
           </div>
         )}
-        {confiscated && type && !isLicense && (
+        {otherDocs && type && (
           <div className="af-s6 af-reveal">
             <Field label="Document Number" required error={errors.confiscated_document_number} htmlFor="confiscated_document_number">
               <input id="confiscated_document_number" className={`input ${errors.confiscated_document_number ? 'input-error' : ''}`}
@@ -243,7 +267,7 @@ function ConfiscationSection({ form, errors, onChange, statusLocked, licenseLock
             </Field>
           </div>
         )}
-        {confiscated && isLicense && (
+        {confiscated && (
           <div className="af-s6 af-reveal">
             <Field label="Driver's License Number" required error={errors.license_number} htmlFor="license_number">
               <input id="license_number" className={`input ${errors.license_number ? 'input-error' : ''}`}
@@ -727,9 +751,8 @@ const Row = ({ label, children }) => (
 
 /* ── STEP 4: Review (read-only; reads the SAME form state that is submitted) ── */
 export function AssessmentStep4({ form, violationData, selectedTypes, totalPenalty, formatCurrency, onBack, onConfirmPayment, loading, paid, onEditStep }) {
-  const confiscated = form.license_status === 'confiscated'
+  const status = form.license_status
   const docType = CONFISCATED_DOCUMENT_OPTIONS.find(o => o.value === form.confiscated_document_type)
-  const isLicense = form.confiscated_document_type === 'drivers_license'
   return (
     <section className="af-panel" aria-labelledby="af-step4-title">
       <div className="af-section" style={{ paddingBottom: 6 }}>
@@ -751,13 +774,19 @@ export function AssessmentStep4({ form, violationData, selectedTypes, totalPenal
               <Row label="Model">{form.vehicle_model}</Row>
             </ReviewBlock>
             <ReviewBlock paid={paid} onEditStep={onEditStep} title="Confiscation of Documents" step={1}>
-              {!confiscated ? <Row label="Confiscation">Not Confiscated</Row> : (
+              {status === 'confiscated' ? (
                 <>
-                  <Row label="Confiscation">Confiscated</Row>
-                  <Row label="Type of Document">{form.confiscated_document_type === 'others' ? (form.confiscated_document_name || 'Others') : docType?.label}</Row>
-                  <Row label="Document Number">{isLicense ? form.license_number : form.confiscated_document_number}</Row>
+                  <Row label="Confiscation">Confiscated (driver&apos;s license held in custody)</Row>
+                  <Row label="Type of Document">Driver&apos;s License</Row>
+                  <Row label="Document Number">{form.license_number}</Row>
                 </>
-              )}
+              ) : status === 'other_documents' ? (
+                <>
+                  <Row label="Confiscation">Other Documents (information recorded only)</Row>
+                  <Row label="Type of Document">{form.confiscated_document_type === 'others' ? (form.confiscated_document_name || 'Others') : docType?.label}</Row>
+                  <Row label="Document Number">{form.confiscated_document_number}</Row>
+                </>
+              ) : <Row label="Confiscation">Not Confiscated</Row>}
             </ReviewBlock>
           </div>
           <div>

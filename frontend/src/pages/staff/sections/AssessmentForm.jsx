@@ -70,14 +70,25 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
       if (violationData.date_issued) {
         try { parsedDate = violationData.date_issued.slice(0, 10) } catch { /* ignore */ }
       }
+      // Confiscation choices: 'confiscated' now means the driver's license is
+      // held in custody, so its document type is always the driver's license
+      // (an Enforcer OVR arrives with it blank until Staff completes it).
+      // A legacy record stored as 'confiscated' with another document type
+      // (UMID, etc.) is shown as 'Other Documents' so it is never silently
+      // turned into a driver's license; it is only re-saved if Staff saves.
+      const loadedStatus = violationData.license_status || 'not_confiscated'
+      const loadedType = violationData.confiscated_document_type || ''
+      const legacyOtherDoc = loadedStatus === 'confiscated' && loadedType !== '' && loadedType !== 'drivers_license'
+      const formStatus = legacyOtherDoc ? 'other_documents' : loadedStatus
+      const formType = formStatus === 'confiscated' ? 'drivers_license' : loadedType
       // eslint-disable-next-line react-hooks/set-state-in-effect -- prop-driven form population when navigating in with an existing violation, matches existing codebase convention
       setForm(prev => ({
         ...prev,
         full_name: violationData.violator_name || violationData.full_name || '',
         address: violationData.address || '',
         license_number: violationData.license_number || '',
-        license_status: violationData.license_status || 'not_confiscated',
-        confiscated_document_type: violationData.confiscated_document_type || '',
+        license_status: formStatus,
+        confiscated_document_type: formType,
         confiscated_document_name: violationData.confiscated_document_name || '',
         confiscated_document_number: violationData.confiscated_document_number || '',
         plate_number: violationData.plate_number || '',
@@ -228,12 +239,16 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
     if (!f.address.trim()) e.address = 'Required'
     // License Number is no longer globally required. Confiscation rules
     // (mirrored by the backend, which is the real enforcement):
+    //   Confiscated     -> the driver's license is in custody, so its number is required.
+    //   Other Documents -> a valid ID type and its number are required
+    //                      ('Others' also needs a name); nothing enters custody.
     if (f.license_status === 'confiscated') {
+      if (!f.license_number.trim()) e.license_number = "Enter the Driver's License number"
+    } else if (f.license_status === 'other_documents') {
       const type = f.confiscated_document_type
       if (!type) e.confiscated_document_type = 'Select the document type'
       else if (type === 'others' && !f.confiscated_document_name.trim()) e.confiscated_document_name = 'Required for Others'
-      else if (type === 'drivers_license' && !f.license_number.trim()) e.license_number = "Enter the Driver's License number"
-      if (type && type !== 'drivers_license' && !f.confiscated_document_number.trim()) e.confiscated_document_number = 'Required'
+      if (type && !f.confiscated_document_number.trim()) e.confiscated_document_number = 'Required'
     }
     if (!f.plate_number.trim()) e.plate_number = 'Required'
     if (!f.vehicle_type) e.vehicle_type = 'Required'
@@ -307,13 +322,26 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
   // "persist edits to an existing violation" PATCH and the "create a new
   // walk-in violation" POST — kept as one source of truth so nothing typed
   // into the form silently fails to reach the database.
-  const buildConfiscationFields = () => (form.license_status === 'confiscated' ? {
-    confiscated_document_type: form.confiscated_document_type,
-    confiscated_document_name: form.confiscated_document_type === 'others' ? form.confiscated_document_name.trim() : '',
-    confiscated_document_number: form.confiscated_document_type === 'drivers_license' ? '' : form.confiscated_document_number.trim(),
-  } : {
-    confiscated_document_type: '', confiscated_document_name: '', confiscated_document_number: '',
-  })
+  //   Confiscated     -> the driver's license (type fixed; number is license_number).
+  //   Other Documents -> the chosen ID type, its name (Others only) and number.
+  //   Not Confiscated -> everything cleared.
+  const buildConfiscationFields = () => {
+    if (form.license_status === 'confiscated') {
+      return {
+        confiscated_document_type: 'drivers_license',
+        confiscated_document_name: '',
+        confiscated_document_number: '',
+      }
+    }
+    if (form.license_status === 'other_documents') {
+      return {
+        confiscated_document_type: form.confiscated_document_type,
+        confiscated_document_name: form.confiscated_document_type === 'others' ? form.confiscated_document_name.trim() : '',
+        confiscated_document_number: form.confiscated_document_number.trim(),
+      }
+    }
+    return { confiscated_document_type: '', confiscated_document_name: '', confiscated_document_number: '' }
+  }
 
   const buildEditableFields = () => ({
     violator_name: form.full_name,
@@ -355,11 +383,13 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
 
   // Enforcer OVRs keep their original field record locked, but the internal
   // confiscated-document details are Staff's to complete. Only those fields
-  // (plus the License Number when the OVR had none) are sent.
+  // (plus the License Number when the OVR had none) are sent. The
+  // confiscation choice is sent too, so a legacy record shown as
+  // 'Other Documents' is saved consistently with its document details.
   const persistConfiscationDetails = (id) => {
-    if (form.license_status !== 'confiscated') return Promise.resolve()
-    const body = { ...buildConfiscationFields() }
-    if (form.confiscated_document_type === 'drivers_license' && !violationData?.license_number) {
+    if (form.license_status === 'not_confiscated') return Promise.resolve()
+    const body = { license_status: form.license_status, ...buildConfiscationFields() }
+    if (form.license_status === 'confiscated' && !violationData?.license_number) {
       body.license_number = form.license_number
     }
     return api.patch(`/api/violations/${id}/`, body)

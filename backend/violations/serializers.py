@@ -489,17 +489,20 @@ class ViolationDetailSerializer(GpsCoordinateValidationMixin, serializers.ModelS
         """
         Backend enforcement of the Step 1 confiscation rules (never only a
         UI show/hide):
-          NOT CONFISCATED -> every confiscation-detail field is cleared, so
-                             no stale document data stays authoritative.
-          CONFISCATED     -> document type required; Others needs a custom
-                             name; the relevant number is required
-                             (Driver's License -> license_number, every
-                             other type -> confiscated_document_number).
+          NOT CONFISCATED -> every confiscation-detail field is cleared.
+          CONFISCATED     -> the driver's license is in custody: document
+                             type required (the form always sends the
+                             driver's license) and its license_number.
+          OTHER DOCUMENTS -> only the violator's ID information is recorded
+                             (never custody): document type required and it
+                             must not be the driver's license; Others needs
+                             a custom name; the document number is required.
         Strict checks apply to Staff/Admin (who do the assessment). The
         Enforcer's Issue-OVR wizard has no document fields, so an Enforcer's
         confiscated record is accepted as-is and Staff completes the
-        details during assessment. Historical records are only re-validated
-        when a confiscation-related field is part of the request.
+        details during assessment. Enforcers cannot record Other Documents.
+        Historical records are only re-validated when a confiscation-related
+        field is part of the request.
         """
         inst = self.instance
         touched = any(k in attrs for k in (
@@ -516,7 +519,7 @@ class ViolationDetailSerializer(GpsCoordinateValidationMixin, serializers.ModelS
 
         status_value = cur('license_status', 'not_confiscated') or 'not_confiscated'
 
-        if status_value != 'confiscated':
+        if status_value not in ('confiscated', 'other_documents'):
             attrs['confiscated_document_type'] = ''
             attrs['confiscated_document_name'] = ''
             attrs['confiscated_document_number'] = ''
@@ -524,12 +527,17 @@ class ViolationDetailSerializer(GpsCoordinateValidationMixin, serializers.ModelS
 
         request = self.context.get('request')
         if request is not None and getattr(request.user, 'role', None) == 'enforcer':
+            if status_value == 'other_documents':
+                raise serializers.ValidationError(
+                    {'license_status': 'Other Documents can only be recorded by Assessment Staff.'})
             return
 
         doc_type = (cur('confiscated_document_type') or '').strip()
         errors = {}
         if not doc_type:
             errors['confiscated_document_type'] = 'Select the confiscated document type.'
+        elif status_value == 'other_documents' and doc_type == Violation.ConfiscatedDocument.DRIVERS_LICENSE:
+            errors['confiscated_document_type'] = "Choose Confiscated when the driver's license is held in custody."
         else:
             if doc_type == Violation.ConfiscatedDocument.OTHERS:
                 if not (cur('confiscated_document_name') or '').strip():

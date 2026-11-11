@@ -85,7 +85,7 @@ export default function OVRPrintTemplate({ violation, onClose }) {
   const isPrivate = violation?.vehicle_use === 'private'
   const isPublic  = violation?.vehicle_use === 'public'
   const isConfiscated    = violation?.license_status === 'confiscated'
-  const isNotConfiscated = violation?.license_status === 'not_confiscated'
+  const isNotConfiscated = violation?.license_status === 'not_confiscated' || violation?.license_status === 'other_documents'
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}

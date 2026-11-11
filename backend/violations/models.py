@@ -72,7 +72,7 @@ class Violation(models.Model):
     # Violator info
     violator_name = models.CharField(max_length=200)
     license_number = models.CharField(max_length=50, blank=True)
-    license_status = models.CharField(max_length=20, choices=[('confiscated','Confiscated'),('not_confiscated','Not Confiscated')], default='not_confiscated')
+    license_status = models.CharField(max_length=20, choices=[('confiscated','Confiscated'),('not_confiscated','Not Confiscated'),('other_documents','Other Documents')], default='not_confiscated')
 
     class ConfiscatedDocument(models.TextChoices):
         """INTERNAL record field only — never printed on the Assessment Form."""
