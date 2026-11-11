@@ -13,6 +13,7 @@ import PrintConfirmModal from '../../../components/print/PrintConfirmModal'
 import usePrintConfirmation from '../../../components/print/usePrintConfirmation'
 import './assessment/assessmentFlow.css'
 import { buildReceiptTicket } from './assessment/receiptTicket'
+import { filterTypesByVehicle, pruneSelectedIds } from '../../../utils/violationTypeFilter'
 
 export default function AssessmentForm({ violationData = null, onSuccess }) {
   const toast = useToast()
@@ -106,6 +107,20 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
     }
   }, [violationData])
 
+  // Walk-in complaints only: the vehicle type decides which violations apply,
+  // so when it changes any ticked violation that no longer applies is dropped.
+  // An existing Enforcer OVR (violationData) is never touched — its violations
+  // are the Enforcer's original, locked field record, even if one of them no
+  // longer matches the vehicle type. Skipped until the list is loaded.
+  useEffect(() => {
+    if (violationData || violationTypes.length === 0) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- keeps the ticked violations in step with the chosen vehicle type
+    setSelectedIds(prev => {
+      const next = pruneSelectedIds(prev, violationTypes, form.vehicle_type)
+      return next.length === prev.length ? prev : next
+    })
+  }, [violationData, violationTypes, form.vehicle_type])
+
   // For an existing Enforcer OVR the violations are locked, so the stored
   // (snapshotted) penalty is the amount — never re-priced from today's
   // ViolationType list. Walk-ins are priced live until the server stores
@@ -115,7 +130,11 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
     ? Number(violationData.penalty_amount)
     : liveTotal
 
-  const filtered = violationTypes.filter(vt =>
+  // Walk-in: offer only the violations that apply to the chosen vehicle type
+  // (unassigned types and unresolvable vehicle types show all). Existing
+  // Enforcer OVR: the full list is kept so its locked violations always show.
+  const offeredTypes = violationData ? violationTypes : filterTypesByVehicle(violationTypes, form.vehicle_type)
+  const filtered = offeredTypes.filter(vt =>
     !vtSearch || vt.name.toLowerCase().includes(vtSearch.toLowerCase()) || vt.code.toLowerCase().includes(vtSearch.toLowerCase())
   )
   const grouped = filtered.reduce((acc, vt) => {

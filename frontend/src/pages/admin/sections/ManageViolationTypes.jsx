@@ -22,6 +22,30 @@ const CAT_CFG = {
 }
 const getCat = (c = '') => CAT_CFG[c?.toLowerCase()] || CAT_CFG.other
 
+/* ── VEHICLE TYPE CONFIG ───────────────────────────────────────
+   Same keys as ViolationType.VehicleCategory / VehicleBrandModel.Category
+   on the backend. '' = not assigned yet → the violation is offered for
+   every vehicle type. */
+const VEHICLE_OPTIONS = [
+  ['',           'Unassigned (all vehicle types)'],
+  ['motorcycle', 'Motorcycles'],
+  ['car',        'Cars'],
+  ['puv',        'Public Utility Vehicles'],
+  ['truck',      'Trucks & Heavy Vehicles'],
+  ['special',    'Special / Other'],
+]
+const VEHICLE_LABEL = Object.fromEntries(VEHICLE_OPTIONS.filter(([key]) => key))
+
+const VehicleSelect = ({ value, onChange }) => (
+  <Field label="Vehicle Type" helper="Leave Unassigned to offer this violation for every vehicle type.">
+    {id => (
+      <select id={id} className="select" value={value} onChange={e => onChange(e.target.value)}>
+        {VEHICLE_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+      </select>
+    )}
+  </Field>
+)
+
 const fmt = (n) => n != null ? `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'
 const avg = (arr) => arr.length ? arr.reduce((s, v) => s + Number(v.penalty_amount || 0), 0) / arr.length : 0
 
@@ -59,6 +83,7 @@ const ViolationTypeModal = ({ item, onClose, onSave }) => {
     violation_name: item?.violation_name || item?.name || '',
     description: item?.description || '',
     category: item?.category || 'traffic',
+    vehicle_category: item?.vehicle_category || '',
     penalty_amount: item?.penalty_amount || '',
   })
   const [errors, setErrors] = useState({})
@@ -94,6 +119,7 @@ const ViolationTypeModal = ({ item, onClose, onSave }) => {
         name: form.violation_name,
         description: form.description,
         category: form.category,
+        vehicle_category: form.vehicle_category,
         penalty_amount: form.penalty_amount,
       }
       if (isEdit) await api.patch(`${API.VIOLATION_TYPES}${item.id}/`, payload)
@@ -150,6 +176,10 @@ const ViolationTypeModal = ({ item, onClose, onSave }) => {
         </div>
 
         <div style={{ marginTop: 12 }}>
+          <VehicleSelect value={form.vehicle_category} onChange={v => set('vehicle_category', v)} />
+        </div>
+
+        <div style={{ marginTop: 12 }}>
           <Field label="Description" helper="Brief description of this violation type…">
             {id => <Textarea id={id} rows={3} value={form.description} onChange={e => set('description', e.target.value)} placeholder="Brief description of this violation type…" />}
           </Field>
@@ -171,6 +201,7 @@ const ViolationTypeModal = ({ item, onClose, onSave }) => {
               ['Code', form.code],
               ['Violation Name', form.violation_name],
               ['Category', CAT_CFG[form.category]?.label || form.category],
+              ['Vehicle Type', VEHICLE_LABEL[form.vehicle_category] || 'Unassigned (all vehicle types)'],
               ['Penalty Amount', `₱${Number(form.penalty_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`],
               ['Description', form.description || '—'],
             ].map(([label, value]) => (
@@ -186,14 +217,22 @@ const ViolationTypeModal = ({ item, onClose, onSave }) => {
   )
 }
 
-/* ── VIEW (READ-ONLY) MODAL ────────────────────────────────── */
-const ViolationTypeViewModal = ({ item, onClose }) => {
-  if (!item) return null
+/* ── VIEW MODAL ────────────────────────────────────────────── */
+// Details stay read-only (code, name, category, fine, description are never
+// edited here). The ONE thing Admin can change on an existing row is its
+// Vehicle Type, so older violation types can be assigned to a vehicle type.
+// Only { vehicle_category } is sent — the fine is untouched, so existing
+// records keep their penalty snapshots.
+const ViolationTypeViewContent = ({ item, onClose, onSaved }) => {
+  const [vehicle, setVehicle] = useState(item.vehicle_category || '')
+  const [saving, setSaving] = useState(false)
+  const dirty = vehicle !== (item.vehicle_category || '')
+
   const cat = getCat(item.category)
   const name = item.violation_name || item.name || '—'
   // Same label/value row pattern as the Add-flow's own "Confirm New
   // Violation Type" step above — reusing it here instead of introducing a
-  // new layout, since this modal exists purely to display, never edit.
+  // new layout, since these rows exist purely to display, never edit.
   const rows = [
     ['Violation Code', item.code || '—'],
     ['Violation Name', name],
@@ -201,11 +240,25 @@ const ViolationTypeViewModal = ({ item, onClose }) => {
     ['Penalty Amount', fmt(item.penalty_amount)],
     ['Description', item.description || '—'],
   ]
+
+  const saveVehicle = async () => {
+    setSaving(true)
+    try {
+      await api.patch(`${API.VIOLATION_TYPES}${item.id}/`, { vehicle_category: vehicle })
+      onSaved(true)
+    } catch { onSaved(false) } finally { setSaving(false) }
+  }
+
   return (
     <Modal
       open onClose={onClose} width={480}
       title="Violation Type Details"
-      footer={<Button variant="secondary" onClick={onClose}>Close</Button>}
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Close</Button>
+        <Button onClick={saveVehicle} loading={saving} disabled={!dirty || saving}>
+          {saving ? 'Saving…' : 'Save Vehicle Type'}
+        </Button>
+      </>}
     >
       <div style={{ display: 'grid', gap: 10 }}>
         {rows.map(([label, value]) => (
@@ -215,8 +268,18 @@ const ViolationTypeViewModal = ({ item, onClose }) => {
           </div>
         ))}
       </div>
+      <div style={{ marginTop: 14 }}>
+        <VehicleSelect value={vehicle} onChange={setVehicle} />
+      </div>
     </Modal>
   )
+}
+
+const ViolationTypeViewModal = ({ item, onClose, onSaved }) => {
+  if (!item) return null
+  // key = item.id so the vehicle dropdown restarts from the saved value
+  // whenever a different row is opened.
+  return <ViolationTypeViewContent key={item.id} item={item} onClose={onClose} onSaved={onSaved} />
 }
 
 /* ── module-level sortable header (must not be redefined per render) ── */
@@ -244,6 +307,7 @@ export default function ManageViolationTypes() {
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState('')
   const [catFilter, setCat]       = useState('all')
+  const [vehFilter, setVehFilter] = useState('all')
   const [sortKey, setSortKey]     = useState('violation_name')
   const [sortDir, setSortDir]     = useState('asc')
   const [page, setPage]           = useState(1)
@@ -275,6 +339,12 @@ export default function ManageViolationTypes() {
   }
 
   /* ── filter + sort ── */
+  const sortValue = (t) => (
+    sortKey === 'vehicle_category'
+      ? (VEHICLE_LABEL[t.vehicle_category] || 'zzz')   // unassigned rows sort last
+      : (t[sortKey] || t.name || '')
+  )
+
   const filtered = types
     .filter(t => {
       const q = search.toLowerCase()
@@ -283,7 +353,9 @@ export default function ManageViolationTypes() {
         (t.violation_name || t.name || '').toLowerCase().includes(q) ||
         (t.description || '').toLowerCase().includes(q)
       const matchC = catFilter === 'all' || (t.category || '').toLowerCase() === catFilter
-      return matchQ && matchC
+      const matchV = vehFilter === 'all'
+        || (vehFilter === 'unassigned' ? !t.vehicle_category : t.vehicle_category === vehFilter)
+      return matchQ && matchC && matchV
     })
     .sort((a, b) => {
       let va = '', vb = ''
@@ -291,8 +363,8 @@ export default function ManageViolationTypes() {
         va = Number(a.penalty_amount || 0); vb = Number(b.penalty_amount || 0)
         return sortDir === 'asc' ? va - vb : vb - va
       }
-      va = (a[sortKey] || a.name || '').toString().toLowerCase()
-      vb = (b[sortKey] || b.name || '').toString().toLowerCase()
+      va = sortValue(a).toString().toLowerCase()
+      vb = sortValue(b).toString().toLowerCase()
       return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
     })
 
@@ -301,8 +373,8 @@ export default function ManageViolationTypes() {
 
   const doSort = (k) => { if (sortKey === k) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortKey(k); setSortDir('asc') } }
 
-  const clearFilters = () => { setSearch(''); setCat('all'); setPage(1) }
-  const hasFilters = search || catFilter !== 'all'
+  const clearFilters = () => { setSearch(''); setCat('all'); setVehFilter('all'); setPage(1) }
+  const hasFilters = search || catFilter !== 'all' || vehFilter !== 'all'
 
   /* ── delete ── */
   const handleDelete = async () => {
@@ -320,6 +392,12 @@ export default function ManageViolationTypes() {
     else toast.danger('Failed to save. Please try again.')
   }
 
+  // Vehicle Type change from the details view.
+  const handleVehicleSaved = (ok) => {
+    if (ok) { toast.success('Vehicle type updated.'); setViewItem(null); load() }
+    else toast.danger('Failed to update the vehicle type. Please try again.')
+  }
+
   const CARDS = [
     { label: 'Total Types', value: stats.total, icon: List, accent: 'var(--blue-600)' },
     { label: 'Safety Violations', value: stats.safety, icon: AlertTriangle, accent: 'var(--danger-600)' },
@@ -331,6 +409,7 @@ export default function ManageViolationTypes() {
     { label: 'Code', key: 'code', sortable: true },
     { label: 'Violation Name', key: 'violation_name', sortable: true },
     { label: 'Description', key: 'description', sortable: false },
+    { label: 'Vehicle Type', key: 'vehicle_category', sortable: true },
     { label: 'Category', key: 'category', sortable: true },
     { label: 'Penalty (₱)', key: 'penalty_amount', sortable: true, align: 'right' },
     { label: '', key: 'actions', sortable: false },
@@ -389,6 +468,12 @@ export default function ManageViolationTypes() {
             <option value="other">Others</option>
           </select>
 
+          <select className="filter-select" value={vehFilter} onChange={e => { setVehFilter(e.target.value); setPage(1) }} aria-label="Filter by vehicle type">
+            <option value="all">All Vehicle Types</option>
+            {VEHICLE_OPTIONS.filter(([key]) => key).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            <option value="unassigned">Unassigned</option>
+          </select>
+
           {hasFilters && <Button variant="danger-ghost" size="sm" icon={X} onClick={clearFilters}>Clear</Button>}
 
           <span className="text-caption" style={{ marginLeft: 'auto' }}>
@@ -410,7 +495,7 @@ export default function ManageViolationTypes() {
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
-                    {[70, 140, 200, 90, 90, 70].map((w, j) => (
+                    {[70, 140, 200, 110, 90, 90, 70].map((w, j) => (
                       <td key={j}><div className="skeleton" style={{ height: 13, width: w }} /></td>
                     ))}
                   </tr>
@@ -421,7 +506,7 @@ export default function ManageViolationTypes() {
                     <EmptyState
                       icon={FileText}
                       title={hasFilters ? 'No violation types match your filters' : 'No violation types yet'}
-                      message={hasFilters ? 'Try adjusting your search or category filter' : 'Add your first violation type to get started'}
+                      message={hasFilters ? 'Try adjusting your search, category or vehicle type filter' : 'Add your first violation type to get started'}
                       action={!hasFilters && <Button size="sm" icon={Plus} onClick={() => setModal('add')}>Add Violation Type</Button>}
                     />
                   </td>
@@ -429,11 +514,17 @@ export default function ManageViolationTypes() {
               ) : paged.map(t => {
                 const cat = getCat(t.category)
                 const name = t.violation_name || t.name || '—'
+                const vehicleLabel = VEHICLE_LABEL[t.vehicle_category]
                 return (
                   <tr key={t.id} onClick={() => setViewItem(t)} style={{ cursor: 'pointer' }}>
                     <td><span className="mono" style={{ fontSize: 12, fontWeight: 700, color: 'var(--blue-700)', background: 'var(--blue-50)', padding: '3px 9px', borderRadius: 'var(--radius-sm)' }}>{t.code || '—'}</span></td>
                     <td style={{ fontWeight: 600, color: 'var(--slate-950)' }}>{name}</td>
                     <td style={{ maxWidth: 260 }}><span className="u-truncate" style={{ display: 'block', color: 'var(--slate-600)', fontSize: 12 }}>{t.description || '—'}</span></td>
+                    <td>
+                      {vehicleLabel
+                        ? <Badge tone="info" dot={false}>{vehicleLabel}</Badge>
+                        : <Badge tone="neutral" dot={false}>Unassigned</Badge>}
+                    </td>
                     <td><Badge tone={cat.tone} dot={false}>{cat.label}</Badge></td>
                     <td style={{ textAlign: 'right' }}><span className="mono" style={{ fontWeight: 700, color: 'var(--slate-950)' }}>{fmt(t.penalty_amount)}</span></td>
                     <td>
@@ -481,7 +572,7 @@ export default function ManageViolationTypes() {
 
       {/* Overlays */}
       {modal === 'add' && <ViolationTypeModal item={null} onClose={() => setModal(null)} onSave={handleSave} />}
-      <ViolationTypeViewModal item={viewItem} onClose={() => setViewItem(null)} />
+      <ViolationTypeViewModal item={viewItem} onClose={() => setViewItem(null)} onSaved={handleVehicleSaved} />
       <DeleteModal item={delItem} onConfirm={handleDelete} onCancel={() => setDelItem(null)} />
     </div>
   )

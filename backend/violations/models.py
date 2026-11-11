@@ -9,12 +9,25 @@ class ViolationType(models.Model):
         TRAFFIC = 'traffic', 'Traffic Violation'
         OTHER = 'other', 'Other'
 
+    class VehicleCategory(models.TextChoices):
+        # Same keys as VehicleBrandModel.Category.
+        MOTORCYCLE = 'motorcycle', 'Motorcycles'
+        CAR        = 'car',        'Cars'
+        PUV        = 'puv',        'Public Utility Vehicles'
+        TRUCK      = 'truck',      'Trucks & Heavy Vehicles'
+        SPECIAL    = 'special',    'Special/ Other'
+
     code = models.CharField(max_length=20, unique=True)
     name = models.CharField(max_length=200)
     category = models.CharField(max_length=20, choices=Category.choices, default=Category.TRAFFIC)
     penalty_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    # The one vehicle type this violation applies to. Blank means it has not
+    # been assigned yet and is offered for every vehicle type.
+    vehicle_category = models.CharField(
+        max_length=20, choices=VehicleCategory.choices, blank=True, default=''
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -22,7 +35,6 @@ class ViolationType(models.Model):
 
     def __str__(self):
         return f"{self.code} - {self.name}"
-
 
 class Violation(models.Model):
     class Status(models.TextChoices):

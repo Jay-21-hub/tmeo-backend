@@ -16,6 +16,7 @@ import Badge from '../../../components/ui/Badge'
 import { EmptyState } from '../../../components/ui/States'
 import { manilaNowIso } from './issue-ovr/helpers'
 import { toTitleCase } from '../../../utils/helpers'
+import { filterTypesByVehicle, pruneSelectedIds } from '../../../utils/violationTypeFilter'
 
 const VTYPES_KEY  = 'tmeo_cached_violation_types'
 
@@ -142,8 +143,22 @@ function Step1({ form, setField, isMobile }) {
 }
 
 function Step2({ form, setField, setForm, toggleVType, violationTypes }) {
+  // `selected` / total always come from the full list; only the checklist is
+  // narrowed to the violations that apply to the chosen vehicle type
+  // (unassigned types and unresolvable vehicle types show all).
   const selected = violationTypes.filter(v => form.violation_type_ids.includes(v.id))
   const total = selected.reduce((s, v) => s + parseFloat(v.penalty_amount || 0), 0)
+  const available = filterTypesByVehicle(violationTypes, form.vehicle_type)
+
+  // Picking a different vehicle type drops any ticked violation that no
+  // longer applies to it. Skipped while the violation list is not cached yet.
+  const applyVehicle = (patch) => setForm(f => {
+    const next = { ...f, ...patch }
+    if (violationTypes.length > 0) {
+      next.violation_type_ids = pruneSelectedIds(f.violation_type_ids, violationTypes, next.vehicle_type)
+    }
+    return next
+  })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -152,7 +167,7 @@ function Step2({ form, setField, setForm, toggleVType, violationTypes }) {
       </Field>
       <VehicleCatalogField
         value={{ vehicle_type: form.vehicle_type, vehicle_brand: form.vehicle_brand, vehicle_model: form.vehicle_model }}
-        onSelect={v => setForm(f => ({ ...f, ...v }))}
+        onSelect={v => applyVehicle(v)}
         onClear={() => setForm(f => ({ ...f, vehicle_type: '', vehicle_brand: '', vehicle_model: '' }))}
         required
         accent="var(--warning-600)"
@@ -167,7 +182,12 @@ function Step2({ form, setField, setForm, toggleVType, violationTypes }) {
         </label>
         {violationTypes.length > 0 ? (
           <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', maxHeight: 220, overflowY: 'auto', background: 'var(--white)' }}>
-            {violationTypes.map(v => {
+            {available.length === 0 && (
+              <div className="text-caption" style={{ padding: '14px', textAlign: 'center' }}>
+                No violation is assigned to this vehicle type yet.
+              </div>
+            )}
+            {available.map(v => {
               const checked = form.violation_type_ids.includes(v.id)
               return (
                 <label key={v.id} style={{
@@ -322,6 +342,8 @@ export default function SyncData() {
   // Step 2. That way the cache is warm before connectivity is ever lost,
   // even if the enforcer never happens to use Issue OVR (which shares the
   // same 'tmeo_cached_violation_types' key) first.
+  // The cached types carry `vehicle_category`, so the per-vehicle-type
+  // violation filter in Step 2 also works offline.
   useEffect(() => {
     if (!isOnline) return
     api.get(`${API.VIOLATION_TYPES}?page_size=100`)

@@ -8,6 +8,7 @@ import SuccessScreen from './issue-ovr/SuccessScreen'
 import {
   buildOvrFormData, emptyForm, isFormDirty, manilaNowIso, mergeOcrIntoForm,
 } from './issue-ovr/helpers'
+import { filterTypesByVehicle, pruneSelectedIds } from '../../../utils/violationTypeFilter'
 import './IssueOVR.css'
 
 /**
@@ -23,6 +24,14 @@ import './IssueOVR.css'
  *   GET  /api/violations/violator-lookup/  repeat-violator check (by license_number)
  *                                          + vehicle-info lookup (by plate_number)
  *   POST /api/violations/create/           multipart, see buildOvrFormData()
+ *
+ * Violation list per vehicle type: every violation type is assigned to one
+ * vehicle type (ViolationType.vehicle_category). Step 2 only offers the
+ * violations that apply to the vehicle type chosen in Step 1 (types that are
+ * not assigned yet are offered for every vehicle type). When the vehicle type
+ * changes, any ticked violation that no longer applies is dropped. The
+ * backend enforces the same rule on create, so this is a convenience filter,
+ * not the only check.
  *
  * Online Plate Number lookup (added alongside the existing License Number
  * lookup): on blur, the same violator-lookup endpoint is queried by
@@ -169,6 +178,20 @@ export default function IssueOVR({ onSuccess, setPage }) {
 
   const retryTypes = () => { setTypesError(''); setLoadingTypes(true); loadTypes() }
 
+  // The vehicle type decides which violations apply. When it changes (picked
+  // in Step 1, or suggested by the plate lookup), drop any ticked violation
+  // that no longer applies. Skipped until the violation list is loaded so a
+  // slow/empty list never clears a valid selection. Returning `prev` when
+  // nothing is dropped avoids a pointless re-render.
+  useEffect(() => {
+    if (violationTypes.length === 0) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- keeps the ticked violations in step with the chosen vehicle type
+    setSelectedIds(prev => {
+      const next = pruneSelectedIds(prev, violationTypes, form.vehicle_type)
+      return next.length === prev.length ? prev : next
+    })
+  }, [form.vehicle_type, violationTypes])
+
   // GPS + reverse geocoding (Nominatim — same pattern as SubmitReport / GPSTracking).
   // Never overwrites a location the enforcer already typed.
   const requestPosition = useCallback(() => {
@@ -268,6 +291,9 @@ export default function IssueOVR({ onSuccess, setPage }) {
   const toggleId = id => setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]))
   const selectedViolations = violationTypes.filter(vt => selectedIds.includes(vt.id))
   const totalPenalty = selectedViolations.reduce((sum, vt) => sum + Number(vt.penalty_amount), 0)
+  // Only the violations that apply to the vehicle type chosen in Step 1 are
+  // offered in Step 2 (unassigned types and unresolvable vehicle types show all).
+  const availableTypes = filterTypesByVehicle(violationTypes, form.vehicle_type)
 
   // An error shows only while its field is still wrong, so it clears the
   // moment the enforcer fixes it.
@@ -433,7 +459,7 @@ export default function IssueOVR({ onSuccess, setPage }) {
           )}
           {step === 2 && (
             <StepViolation
-              violationTypes={violationTypes} loadingTypes={loadingTypes}
+              violationTypes={availableTypes} loadingTypes={loadingTypes}
               typesError={violationTypes.length === 0 ? typesError : ''} onRetryTypes={retryTypes}
               selectedIds={selectedIds} toggleId={toggleId} search={search} setSearch={setSearch}
               totalPenalty={totalPenalty} form={form} setForm={setForm} errors={errors} gps={gps} />

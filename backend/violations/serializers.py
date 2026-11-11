@@ -48,10 +48,42 @@ class GpsCoordinateValidationMixin:
         return _validate_gps_coordinate(value, -180, 180, 'Longitude')
 
 
+def _vehicle_category_key(vehicle_type):
+    """Map the vehicle type text sent by the forms (a category label such as
+    'Motorcycles', or a key such as 'motorcycle') to a category key.
+    Returns '' when it cannot be resolved (e.g. a free-typed vehicle type)."""
+    text = ''.join((vehicle_type or '').lower().split())
+    if not text:
+        return ''
+    for key, label in VehicleBrandModel.Category.choices:
+        if text in (''.join(key.lower().split()), ''.join(label.lower().split())):
+            return key
+    return ''
+
+
+def _check_types_match_vehicle(types, vehicle_type):
+    """Reject violation types assigned to a different vehicle category.
+    Types with no vehicle_category (not assigned yet) are always accepted."""
+    key = _vehicle_category_key(vehicle_type)
+    if not key:
+        return
+    bad = [t for t in types if t.vehicle_category and t.vehicle_category != key]
+    if bad:
+        raise serializers.ValidationError({
+            'violation_type_ids': 'These violations do not apply to the selected vehicle type: '
+                                  + ', '.join(t.name for t in bad)
+        })
+
+
 class ViolationTypeSerializer(serializers.ModelSerializer):
+    vehicle_category_label = serializers.CharField(source='get_vehicle_category_display', read_only=True)
+
     class Meta:
         model = ViolationType
-        fields = ['id', 'code', 'name', 'category', 'penalty_amount', 'description', 'is_active']
+        fields = [
+            'id', 'code', 'name', 'category', 'penalty_amount', 'description',
+            'is_active', 'vehicle_category', 'vehicle_category_label',
+        ]
 
 
 class VehicleBrandModelSerializer(serializers.ModelSerializer):
@@ -547,6 +579,12 @@ class ViolationDetailSerializer(GpsCoordinateValidationMixin, serializers.ModelS
         type_ids = validated_data.pop('violation_type_ids', [])
         if not type_ids:
             raise serializers.ValidationError({'violation_type_ids': 'At least one violation type is required.'})
+        # Each violation type applies to one vehicle category. Types with no
+        # category assigned yet are accepted for every vehicle type.
+        _check_types_match_vehicle(
+            list(ViolationType.objects.filter(id__in=type_ids)),
+            validated_data.get('vehicle_type'),
+        )
         # enforcer is injected by ViolationCreateView.perform_create via serializer.save(enforcer=request.user)
         violation = Violation.objects.create(**validated_data)
 
@@ -583,6 +621,16 @@ class ViolationDetailSerializer(GpsCoordinateValidationMixin, serializers.ModelS
         instance.save()
 
         if type_ids is not None:
+            # Only NEWLY added violation types are checked against the vehicle
+            # type, so editing an old record that already holds a violation
+            # which no longer matches is not blocked. The whole update runs
+            # inside transaction.atomic(), so a rejection rolls everything back.
+            current = set(instance.items.values_list('violation_type_id', flat=True))
+            _check_types_match_vehicle(
+                list(ViolationType.objects.filter(id__in=[t for t in type_ids if t not in current])),
+                instance.vehicle_type,
+            )
+
             # Respect penalty snapshots: items for a type that stays selected
             # keep their ORIGINAL snapshot; only newly added types take the
             # current price, and removed types are dropped. (Previously every
