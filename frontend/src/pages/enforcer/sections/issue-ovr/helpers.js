@@ -49,7 +49,10 @@ export function emptyForm() {
     location: '', latitude: '', longitude: '',
     date_issued: manilaNowIso(),
     remarks: '',
-    license_photo: null, // File selected via Scan License → Upload Photo (demo); not persisted offline
+    // File selected via Scan License → Upload Photo. It is only read for OCR
+    // (to fill in the driver details). It is never submitted with the OVR and
+    // never saved as evidence; evidence photos have their own capture flow.
+    license_photo: null,
   }
 }
 
@@ -128,9 +131,9 @@ export function buildOvrFormData(form, selectedIds) {
   put('date_issued', form.date_issued)
   put('remarks', form.remarks)
   put('violation_type_ids', JSON.stringify(selectedIds))
-  // Upload Photo (Scan License, Step 1) — reuses the existing writable
-  // Violation.image field; no new endpoint/model for this demo feature.
-  if (form.license_photo) fd.append('image', form.license_photo)
+  // The Upload Photo license photo (form.license_photo) is only read for OCR.
+  // It is deliberately NOT appended here: it must never become the violation's
+  // image / Photo Evidence. Evidence photos use the separate Evidence capture.
   return fd
 }
 
