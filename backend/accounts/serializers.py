@@ -286,6 +286,7 @@ class UpdateUserSerializer(serializers.ModelSerializer):
     last_name   = serializers.CharField(required=False, allow_blank=True, max_length=100)
     first_name  = serializers.CharField(required=False, allow_blank=True, max_length=100)
     middle_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    email = serializers.EmailField(required=False)
 
     class Meta:
         model  = CustomUser
@@ -294,6 +295,7 @@ class UpdateUserSerializer(serializers.ModelSerializer):
             'last_name',
             'first_name',
             'middle_name',
+            'email',
             'phone_number',
             'address',
             'date_of_birth',
@@ -307,6 +309,20 @@ class UpdateUserSerializer(serializers.ModelSerializer):
         # it's recomputed in update() from last/first/middle name instead,
         # so a client can't send a full_name that disagrees with the parts.
         read_only_fields = ['full_name']
+
+    def validate_email(self, value):
+        # Case-insensitive uniqueness, excluding the account being edited.
+        # (A hand-declared field replaces DRF's built-in exact-match
+        # UniqueValidator, so the check is done here instead.)
+        value = value.strip()
+        taken = CustomUser.objects.filter(email__iexact=value)
+        if self.instance is not None:
+            taken = taken.exclude(pk=self.instance.pk)
+        if taken.exists():
+            raise serializers.ValidationError(
+                'This email is already used by another account.'
+            )
+        return value
 
     def validate_profile_photo(self, value):
         # None means "remove the photo" — allowed through untouched.
