@@ -13,6 +13,7 @@ import { EmptyState } from '../../../components/ui/States'
 import Avatar from '../../../components/common/Avatar'
 
 import { getRoleStyle, canChangeRole } from './users/userManagementConfig'
+import { displayUserName } from './users/userDisplayName'
 import UserViewModal from './users/UserViewModal'
 import AddUserModal from './users/AddUserModal'
 import { UserConfirmDialog, UserDeleteAccountModal } from './users/UserConfirmModals'
@@ -82,7 +83,7 @@ export default function UserManagement() {
     setActionLoading(user.id)
     try {
       await api.patch(`/api/auth/users/${user.id}/`, { employment_status: 'terminated' })
-      toast.success(`${user.full_name || user.name} has been deactivated.`)
+      toast.success(`${displayUserName(user)} has been deactivated.`)
       fetchUsers()
     } catch {
       toast.danger('Failed to deactivate user.')
@@ -96,7 +97,7 @@ export default function UserManagement() {
     setActionLoading(user.id)
     try {
       await api.post(`/api/auth/users/${user.id}/reset-password/`)
-      toast.success(`Password reset for ${user.full_name || user.name}.`)
+      toast.success(`Password reset for ${displayUserName(user)}.`)
     } catch {
       toast.danger('Failed to reset password.')
     } finally {
@@ -110,7 +111,7 @@ export default function UserManagement() {
     setActionLoading(user.id)
     try {
       await api.delete(`/api/auth/users/${user.id}/permanent/`)
-      toast.success(`${user.full_name || user.name} has been permanently deleted.`)
+      toast.success(`${displayUserName(user)} has been permanently deleted.`)
       setDeleteConfirm(null)
       fetchUsers()
     } catch (err) {
@@ -137,8 +138,8 @@ export default function UserManagement() {
       {confirm && (
         <UserConfirmDialog
           message={confirm.type === 'deactivate'
-            ? `Deactivate ${confirm.user.full_name || confirm.user.name}? They will lose access immediately.`
-            : `Reset password for ${confirm.user.full_name || confirm.user.name}? A new temporary password will be assigned.`}
+            ? `Deactivate ${displayUserName(confirm.user)}? They will lose access immediately.`
+            : `Reset password for ${displayUserName(confirm.user)}? A new temporary password will be assigned.`}
           danger={confirm.type === 'deactivate'}
           onConfirm={() => confirm.type === 'deactivate' ? handleDeactivate(confirm.user) : handleResetPW(confirm.user)}
           onCancel={() => setConfirm(null)}
@@ -224,7 +225,7 @@ export default function UserManagement() {
                 const roleStyle = getRoleStyle(user.role)
                 const isActive = user.is_active !== false
                 const isLoading = actionLoading === user.id
-                const displayName = user.full_name || user.name || '—'
+                const displayName = displayUserName(user)
                 return (
                   <tr key={user.id || idx}>
                     <td>

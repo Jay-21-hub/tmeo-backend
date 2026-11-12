@@ -64,17 +64,3 @@ export const EMPLOYMENT_STATUS_OPTIONS = [
   { value: 'deceased', label: 'Deceased' },
   { value: 'coterminous', label: 'Coterminous' },
 ]
-
-/**
- * Mirrors the backend's build_full_name() (accounts/models.py) so the
- * "Review" step can preview the composed full_name before saving, without
- * waiting on a round trip. Format: "Last, First Middle".
- */
-export const buildFullNameDisplay = (lastName, firstName, middleName) => {
-  const last = (lastName || '').trim()
-  const first = (firstName || '').trim()
-  const middle = (middleName || '').trim()
-  const given = middle ? `${first} ${middle}`.trim() : first
-  if (last && given) return `${last}, ${given}`
-  return last || given || '—'
-}

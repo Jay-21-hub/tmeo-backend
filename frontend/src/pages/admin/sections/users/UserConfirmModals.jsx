@@ -3,6 +3,7 @@ import { AlertCircle, Trash2, CheckCircle } from 'lucide-react'
 import Modal from '../../../../components/ui/Modal'
 import Button from '../../../../components/ui/Button'
 import Alert from '../../../../components/ui/Alert'
+import { displayUserName } from './userDisplayName'
 
 export function UserConfirmDialog({ message, onConfirm, onCancel, danger }) {
   return (
@@ -26,7 +27,9 @@ export function UserConfirmDialog({ message, onConfirm, onCancel, danger }) {
 
 export function UserDeleteAccountModal({ user, onConfirm, onCancel, loading }) {
   const [typed, setTyped] = useState('')
-  const name = user?.full_name || user?.name || ''
+  // Display-only "First Middle Last". The admin types this same text to confirm.
+  const shownName = user ? displayUserName(user) : ''
+  const name = shownName === '—' ? '' : shownName
   const confirmed = typed.trim().toLowerCase() === name.trim().toLowerCase()
 
   return (

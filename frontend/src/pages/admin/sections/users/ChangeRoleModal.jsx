@@ -7,6 +7,7 @@ import { Field, Textarea } from '../../../../components/ui/Field'
 import { changeUserRole } from '../../../../services/api'
 import { ROLE_LABELS, ROLE_CHANGE_REASON_MAX, getRoleChangeTarget } from './userManagementConfig'
 import { getRoleChangeError } from './roleChangeErrors'
+import { displayUserName } from './userDisplayName'
 import './ChangeRoleModal.css'
 
 const roleLabel = (role) => ROLE_LABELS[role] || role || '—'
@@ -45,6 +46,9 @@ async function copyText(text) {
  * The new ID is read ONLY from that response, never generated or inferred here, and
  * the modal stays open until the admin deliberately presses Done.
  *
+ * Names are DISPLAY-only here: shown as "First Middle Last" via displayUserName().
+ * The stored full_name ("Last, First Middle") is never modified or sent anywhere.
+ *
  * Props:
  *  - user      - the row being changed ({ id, role, full_name, email, id_number, ... })
  *  - onClose   - dismiss (blocked while submitting and during the success state, except Done)
@@ -62,7 +66,7 @@ export default function ChangeRoleModal({ user, onClose, onChanged, onStale }) {
   const doneRef = useRef(null)
 
   const newRole = getRoleChangeTarget(user?.role)
-  const name = user?.full_name || user?.name || '—'
+  const name = displayUserName(user)
   const trimmed = reason.trim()
   const canSubmit = !!newRole && trimmed.length > 0 && reason.length <= ROLE_CHANGE_REASON_MAX && !submitting && !result
 
@@ -101,7 +105,9 @@ export default function ChangeRoleModal({ user, onClose, onChanged, onStale }) {
   const toEnforcer = newRole === 'enforcer'
 
   if (result) {
-    const resName = result.user?.full_name || name
+    // The response's user has full_name ("Last, First Middle"); displayUserName
+    // turns it into "First Middle Last". Falls back to the row's name if absent.
+    const resName = result.user?.full_name ? displayUserName(result.user) : name
     return (
       <Modal
         open

@@ -4,17 +4,19 @@ import { StatusBadge } from '../../../../components/ui/Badge'
 import AvatarUploader from '../../../../components/common/AvatarUploader'
 import { API } from '../../../../constants'
 import { getRoleStyle } from './userManagementConfig'
+import { displayUserName } from './userDisplayName'
 
 export default function UserViewModal({ user, onClose, onUpdated }) {
   if (!user) return null
   const roleStyle = getRoleStyle(user.role)
   const isEnforcer = user.role === 'enforcer'
+  const displayName = displayUserName(user)
   const fields = [
     { icon: Hash, label: 'Employee ID (Login ID)', value: user.id_number || '—' },
-    { icon: User, label: 'Full Name', value: user.full_name || user.name || '—' },
-    { icon: User, label: 'Last Name', value: user.last_name || '—' },
+    { icon: User, label: 'Full Name', value: displayName },
     { icon: User, label: 'First Name', value: user.first_name || '—' },
     { icon: User, label: 'Middle Name', value: user.middle_name || '—' },
+    { icon: User, label: 'Last Name', value: user.last_name || '—' },
     { icon: Mail, label: 'Email', value: user.email || '—' },
     { icon: Phone, label: 'Phone', value: user.phone_number || '—' },
     { icon: MapPin, label: 'Address', value: user.address || '—' },
@@ -40,7 +42,7 @@ export default function UserViewModal({ user, onClose, onUpdated }) {
           onDark={false}
         />
         <div>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--slate-950)' }}>{user.full_name || user.name || '—'}</h3>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--slate-950)' }}>{displayName}</h3>
           <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
             <span className="badge" style={{ background: roleStyle.bg, color: roleStyle.text, border: `1px solid ${roleStyle.border}` }} dot={false}>{user.role}</span>
             <StatusBadge status={user.is_active ? 'active' : 'inactive'} label={user.is_active ? 'Active' : 'Inactive'} />

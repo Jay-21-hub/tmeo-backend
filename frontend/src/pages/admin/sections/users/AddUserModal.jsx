@@ -7,8 +7,9 @@ import Alert from '../../../../components/ui/Alert'
 import { Field, TextInput, Select } from '../../../../components/ui/Field'
 import {
   EMPTY_FORM, ROLE_LABELS, CIVIL_STATUS_OPTIONS,
-  EMPLOYMENT_STATUS_OPTIONS, buildFullNameDisplay,
+  EMPLOYMENT_STATUS_OPTIONS,
 } from './userManagementConfig'
+import { buildDisplayName, displayUserName } from './userDisplayName'
 import { toTitleCase, isValidPHPhone } from '../../../../utils/helpers'
 
 const STEPS = [
@@ -47,7 +48,7 @@ function StepIndicator({ current, steps }) {
   )
 }
 
-/* A field the backend won't accept an edit for (email, role, hired_year —
+/* A field the backend won't accept an edit for (role, hired_year —
    not part of UpdateUserSerializer). Shown read-only so the admin still sees
    the value without being able to change it here. */
 function ReadOnlyField({ label, value }) {
@@ -90,9 +91,9 @@ export default function AddUserModal({ onClose, onSuccess, mode = 'create', user
 
   const validateStep1 = () => {
     const e = {}
-    if (!form.last_name.trim()) e.last_name = 'Last name is required'
     if (!form.first_name.trim()) e.first_name = 'First name is required'
-    if (!isEdit && !form.email.trim()) e.email = 'Email is required'
+    if (!form.last_name.trim()) e.last_name = 'Last name is required'
+    if (!form.email.trim()) e.email = 'Email is required'
     if (form.phone_number.trim() && !isValidPHPhone(form.phone_number)) e.phone_number = 'Must be 11 digits starting with 09'
     if (!form.address.trim()) e.address = 'Address is required'
     if (!form.date_of_birth) e.date_of_birth = 'Date of birth is required'
@@ -151,6 +152,10 @@ export default function AddUserModal({ onClose, onSuccess, mode = 'create', user
       civil_status: form.civil_status,
       employment_status: form.employment_status,
     }
+    // Email is sent only when the admin actually changed it, so an unrelated
+    // edit never touches it (and never creates an email change in the audit log).
+    const newEmail = form.email.trim()
+    if (newEmail !== (user.email || '')) payload.email = newEmail
     if (form.role === 'enforcer') {
       payload.badge_number = form.badge_number
       payload.assigned_area = form.assigned_area
@@ -212,7 +217,7 @@ export default function AddUserModal({ onClose, onSuccess, mode = 'create', user
 
         <div style={{ background: 'var(--slate-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
           {[
-            { label: 'Full Name', value: createdUser.full_name },
+            { label: 'Full Name', value: displayUserName(createdUser) },
             { label: 'Email', value: createdUser.email },
             { label: 'Role', value: ROLE_LABELS[createdUser.role] || createdUser.role },
             ...(createdUser.role === 'enforcer' ? [{ label: 'Badge No.', value: createdUser.badge_number || '—' }] : []),
@@ -251,7 +256,7 @@ export default function AddUserModal({ onClose, onSuccess, mode = 'create', user
   return (
     <Modal open onClose={onClose} width={520} title={isEdit ? 'Edit User' : 'Add New User'} footer={footer}>
       <p className="text-caption" style={{ marginTop: -12, marginBottom: 4 }}>
-        {isEdit ? `Update ${user?.full_name || 'user'}'s account details` : 'Fill in user account details'}
+        {isEdit ? `Update ${user ? displayUserName(user) : 'user'}'s account details` : 'Fill in user account details'}
       </p>
 
       <StepIndicator current={step} steps={steps} />
@@ -260,22 +265,23 @@ export default function AddUserModal({ onClose, onSuccess, mode = 'create', user
 
       {step === 1 && (
         <div style={{ display: 'grid', gap: 14 }}>
-          <Field label="Last Name" required error={errors.last_name}>
-            {id => <TextInput id={id} value={form.last_name} onChange={e => set('last_name', e.target.value)} onBlur={e => set('last_name', toTitleCase(e.target.value))} placeholder="Last Name" error={!!errors.last_name} />}
-          </Field>
           <Field label="First Name" required error={errors.first_name}>
             {id => <TextInput id={id} value={form.first_name} onChange={e => set('first_name', e.target.value)} onBlur={e => set('first_name', toTitleCase(e.target.value))} placeholder="First Name" error={!!errors.first_name} />}
           </Field>
           <Field label="Middle Name" helper="Optional">
             {id => <TextInput id={id} value={form.middle_name} onChange={e => set('middle_name', e.target.value)} onBlur={e => set('middle_name', toTitleCase(e.target.value))} placeholder="Middle Name" />}
           </Field>
-          {isEdit ? (
-            <ReadOnlyField label="Email" value={form.email} />
-          ) : (
-            <Field label="Email" required error={errors.email}>
-              {id => <TextInput id={id} type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="Email" error={!!errors.email} />}
-            </Field>
-          )}
+          <Field label="Last Name" required error={errors.last_name}>
+            {id => <TextInput id={id} value={form.last_name} onChange={e => set('last_name', e.target.value)} onBlur={e => set('last_name', toTitleCase(e.target.value))} placeholder="Last Name" error={!!errors.last_name} />}
+          </Field>
+          <Field
+            label="Email"
+            required
+            error={errors.email}
+            helper={isEdit ? 'Password resets are sent to this address. Change it first if the old one is no longer accessible.' : undefined}
+          >
+            {id => <TextInput id={id} type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="Email" error={!!errors.email} />}
+          </Field>
           <Field label="Phone" error={errors.phone_number} helper="11 digits, starts with 09">
             {id => <TextInput id={id} value={form.phone_number} onChange={e => set('phone_number', e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="09xxxxxxxxx" error={!!errors.phone_number} inputMode="numeric" maxLength={11} />}
           </Field>
@@ -361,7 +367,7 @@ export default function AddUserModal({ onClose, onSuccess, mode = 'create', user
             <p className="text-label" style={{ marginBottom: 8 }}>Review</p>
             <div style={{ background: 'var(--slate-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
               {[
-                { label: 'Full Name', value: buildFullNameDisplay(form.last_name, form.first_name, form.middle_name) },
+                { label: 'Full Name', value: buildDisplayName(form.first_name, form.middle_name, form.last_name) || '—' },
                 { label: 'Email', value: form.email || '—' },
                 { label: 'Phone', value: form.phone_number || '—' },
                 { label: 'Address', value: form.address || '—' },
