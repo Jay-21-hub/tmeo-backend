@@ -141,6 +141,19 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
     ? Number(violationData.penalty_amount)
     : liveTotal
 
+  // Existing Enforcer OVR: each row shows the fine STORED on that violation
+  // item (penalty_amount_snapshot), not today's ViolationType fine, so the
+  // rows always add up to the stored total even after an admin edits a fine.
+  // Falls back to the live fine when the server sends no snapshot.
+  const snapshotByTypeId = new Map(
+    (violationData?.items || [])
+      .filter(i => i.violation_type?.id != null && i.penalty_amount_snapshot != null)
+      .map(i => [i.violation_type.id, i.penalty_amount_snapshot])
+  )
+  const displayTypes = snapshotByTypeId.size
+    ? violationTypes.map(vt => (snapshotByTypeId.has(vt.id) ? { ...vt, penalty_amount: snapshotByTypeId.get(vt.id) } : vt))
+    : violationTypes
+
   // Walk-in: offer only the violations that apply to the chosen vehicle type
   // (unassigned types and unresolvable vehicle types show all). Existing
   // Enforcer OVR: the full list is kept so its locked violations always show.
@@ -494,7 +507,7 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
     })
   }
 
-  const selectedViolationsForModal = violationTypes.filter(vt => selectedIds.includes(vt.id))
+  const selectedViolationsForModal = displayTypes.filter(vt => selectedIds.includes(vt.id))
 
   const goToStep = (n) => { setErrors({}); setStep(n) }
   const selectedViolationsText = selectedViolationsForModal.map(v => v.name).join(', ')
@@ -527,7 +540,7 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
       )}
       {step === 2 && (
         <AssessmentStep2
-          form={form} errors={errors} violationTypes={violationTypes} grouped={grouped} selectedIds={selectedIds}
+          form={form} errors={errors} violationTypes={displayTypes} grouped={grouped} selectedIds={selectedIds}
           vtSearch={vtSearch} loadingTypes={loadingTypes} totalPenalty={totalPenalty} formatCurrency={formatCurrency}
           violationData={violationData}
           onChange={handleChange}

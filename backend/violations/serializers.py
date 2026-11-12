@@ -78,6 +78,11 @@ def _check_types_match_vehicle(types, vehicle_type):
 class ViolationTypeSerializer(serializers.ModelSerializer):
     vehicle_category_label = serializers.CharField(source='get_vehicle_category_display', read_only=True)
 
+    def validate_penalty_amount(self, value):
+        if value is None or value < 0:
+            raise serializers.ValidationError('Penalty amount cannot be negative.')
+        return value
+
     class Meta:
         model = ViolationType
         fields = [
@@ -103,7 +108,8 @@ class ViolationItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ViolationItem
-        fields = ['violation_type', 'violation_type_id']
+        fields = ['violation_type', 'violation_type_id', 'penalty_amount_snapshot']
+        read_only_fields = ['penalty_amount_snapshot']
 
 
 class ViolationItemListSerializer(serializers.ModelSerializer):

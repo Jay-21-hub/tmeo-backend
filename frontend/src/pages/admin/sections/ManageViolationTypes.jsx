@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback } from 'react'
 import PageHeader from '../../../components/ui/PageHeader'
 import {
   List, AlertTriangle, Car, Banknote, Search, X, ChevronUp, ChevronDown,
-  ChevronLeft, ChevronRight, Plus, Trash2, FileText,
+  ChevronLeft, ChevronRight, Plus, Trash2, FileText, Pencil,
 } from 'lucide-react'
 import api from '../../../services/api'
 import { API } from '../../../constants'
 import { useToast } from '../../../context/useToast'
 import Modal from '../../../components/ui/Modal'
 import Button from '../../../components/ui/Button'
+import Alert from '../../../components/ui/Alert'
 import StatCard from '../../../components/ui/StatCard'
 import Badge from '../../../components/ui/Badge'
 import { Field, TextInput, Textarea } from '../../../components/ui/Field'
@@ -217,6 +218,131 @@ const ViolationTypeModal = ({ item, onClose, onSave }) => {
   )
 }
 
+/* ── EDIT FINE MODAL ───────────────────────────────────────────
+   Admin changes ONLY the fine of an existing violation type. Violations that
+   were already issued keep the fine they were issued with: every violation
+   item stores its own penalty snapshot on the server, so a new fine applies to
+   NEW violations only. Only { penalty_amount } is sent. The server also
+   refuses the change for non-admin accounts and records it in the audit log. */
+const MAX_FINE = 99999999.99
+
+const EditFineModal = ({ item, onClose, onSaved }) => {
+  const [fine, setFine] = useState(String(item.penalty_amount ?? ''))
+  const [error, setError] = useState('')
+  const [submitError, setSubmitError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  const name = item.violation_name || item.name || '—'
+  const rows = [
+    ['Violation Code', item.code || '—'],
+    ['Violation Name', name],
+  ]
+
+  const validate = () => {
+    const raw = fine.trim()
+    if (raw === '' || isNaN(Number(raw))) return 'Enter a valid fine amount'
+    if (Number(raw) < 0) return 'Fine cannot be negative'
+    if (!/^\d+(\.\d{1,2})?$/.test(raw)) return 'Use up to 2 decimal places'
+    if (Number(raw) > MAX_FINE) return 'Amount is too large'
+    if (Number(raw) === Number(item.penalty_amount || 0)) return 'This is already the current fine'
+    return ''
+  }
+
+  const handleReview = () => {
+    const msg = validate()
+    setError(msg)
+    if (msg) return
+    setSubmitError('')
+    setShowConfirm(true)
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    setSubmitError('')
+    try {
+      await api.patch(`${API.VIOLATION_TYPES}${item.id}/`, { penalty_amount: fine.trim() })
+      onSaved()
+    } catch (err) {
+      const data = err.response?.data
+      const first = data && typeof data === 'object' ? Object.values(data)[0] : null
+      setSubmitError(
+        data?.detail
+        || (Array.isArray(first) ? first[0] : first)
+        || 'Failed to update the fine. Please try again.'
+      )
+      setShowConfirm(false)
+    } finally { setSaving(false) }
+  }
+
+  const infoRow = ([label, value]) => (
+    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, padding: '10px 14px', background: 'var(--slate-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+      <span className="text-caption" style={{ fontWeight: 500, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 13, color: 'var(--slate-950)', fontWeight: 600, maxWidth: 260, textAlign: 'right' }}>{value}</span>
+    </div>
+  )
+
+  return (
+    <>
+      <Modal
+        open onClose={onClose} width={440}
+        title="Edit Fine"
+        footer={<>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleReview}>Review &amp; Save</Button>
+        </>}
+      >
+        <div style={{ display: 'grid', gap: 10 }}>
+          {rows.map(infoRow)}
+          {infoRow(['Current Fine', fmt(item.penalty_amount)])}
+        </div>
+
+        <div style={{ marginTop: 14 }}>
+          <Field label="New Fine (₱)" required error={error} helper="Up to 2 decimal places.">
+            {id => (
+              <TextInput
+                id={id} type="number" min="0" step="0.01" value={fine}
+                onChange={e => { setFine(e.target.value); setError('') }}
+                placeholder="e.g. 500" error={!!error}
+              />
+            )}
+          </Field>
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          <Alert tone="info">
+            The new fine applies to <strong>new violations only</strong>. Violations already issued, including those still pending, keep the fine they were issued with.
+          </Alert>
+        </div>
+
+        {submitError && <div style={{ marginTop: 12 }}><Alert tone="danger">{submitError}</Alert></div>}
+      </Modal>
+
+      {showConfirm && (
+        <Modal
+          open onClose={() => setShowConfirm(false)} width={420}
+          title="Confirm Fine Change"
+          footer={<>
+            <Button variant="secondary" onClick={() => setShowConfirm(false)} disabled={saving}>Back</Button>
+            <Button onClick={handleSave} loading={saving}>{saving ? 'Saving…' : 'Confirm Change'}</Button>
+          </>}
+        >
+          <div style={{ display: 'grid', gap: 10 }}>
+            {rows.map(infoRow)}
+            {infoRow(['Current Fine', fmt(item.penalty_amount)])}
+            {infoRow(['New Fine', fmt(Number(fine))])}
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <Alert tone="warning">
+              Only <strong>new violations</strong> will use the new fine. Existing violations keep their current fine.
+            </Alert>
+          </div>
+        </Modal>
+      )}
+    </>
+  )
+}
+
 /* ── VIEW MODAL ────────────────────────────────────────────── */
 // Details stay read-only (code, name, category, fine, description are never
 // edited here). The ONE thing Admin can change on an existing row is its
@@ -315,6 +441,7 @@ export default function ManageViolationTypes() {
   const [modal, setModal]         = useState(null)   // null | 'add' — creation only, see ViolationTypeViewModal for viewing existing rows
   const [viewItem, setViewItem]   = useState(null)   // existing row selected for the read-only details view
   const [delItem, setDelItem]     = useState(null)
+  const [editItem, setEditItem]   = useState(null)   // existing row whose fine is being edited
 
   /* ── fetch ── */
   const load = useCallback(async () => {
@@ -390,6 +517,13 @@ export default function ManageViolationTypes() {
     setModal(null)
     if (msg) { toast.success(msg); load() }
     else toast.danger('Failed to save. Please try again.')
+  }
+
+  // Fine change from the Edit Fine modal.
+  const handleFineSaved = () => {
+    setEditItem(null)
+    toast.success('Fine updated. Existing violations keep their previous fine.')
+    load()
   }
 
   // Vehicle Type change from the details view.
@@ -529,6 +663,9 @@ export default function ManageViolationTypes() {
                     <td style={{ textAlign: 'right' }}><span className="mono" style={{ fontWeight: 700, color: 'var(--slate-950)' }}>{fmt(t.penalty_amount)}</span></td>
                     <td>
                       <div className="row-actions">
+                        <button className="row-action-btn" style={{ background: 'var(--blue-50)' }} title="Edit fine" aria-label={`Edit fine of ${name}`} onClick={ev => { ev.stopPropagation(); setEditItem(t) }}>
+                          <Pencil size={13} color="var(--blue-600)" />
+                        </button>
                         <button className="row-action-btn" style={{ background: 'var(--danger-50)' }} title="Delete" aria-label={`Delete ${name}`} onClick={ev => { ev.stopPropagation(); setDelItem(t) }}>
                           <Trash2 size={13} color="var(--danger-600)" />
                         </button>
@@ -573,6 +710,7 @@ export default function ManageViolationTypes() {
       {/* Overlays */}
       {modal === 'add' && <ViolationTypeModal item={null} onClose={() => setModal(null)} onSave={handleSave} />}
       <ViolationTypeViewModal item={viewItem} onClose={() => setViewItem(null)} onSaved={handleVehicleSaved} />
+      {editItem && <EditFineModal key={editItem.id} item={editItem} onClose={() => setEditItem(null)} onSaved={handleFineSaved} />}
       <DeleteModal item={delItem} onConfirm={handleDelete} onCancel={() => setDelItem(null)} />
     </div>
   )

@@ -146,9 +146,21 @@ class ViolationTypeDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = ViolationType.objects.all()
 
     def perform_update(self, serializer):
-        before = snapshot(serializer.instance, ('name', 'code', 'category', 'is_active'))
+        # A fine is money: only an Administrator may change it, even though
+        # Staff may still edit the other fields of a violation type. Checked
+        # on the server so hiding the button in the UI is never the only guard.
+        from rest_framework.exceptions import PermissionDenied
+        new_fine = serializer.validated_data.get('penalty_amount')
+        if (new_fine is not None
+                and new_fine != serializer.instance.penalty_amount
+                and self.request.user.role != 'admin'):
+            raise PermissionDenied('Only an Administrator can change a violation fine.')
+        # penalty_amount is audited so the Audit Log shows who changed the fine
+        # and what it was before. Existing violations keep their own snapshot.
+        audited = ('name', 'code', 'category', 'is_active', 'penalty_amount')
+        before = snapshot(serializer.instance, audited)
         instance = serializer.save()
-        after = snapshot(instance, ('name', 'code', 'category', 'is_active'))
+        after = snapshot(instance, audited)
         log_action(
             user=self.request.user,
             action='UPDATE',
@@ -2547,7 +2559,8 @@ class StaffDashboardView(APIView):
                                 'name':           i.violation_type.name,
                                 'code':           i.violation_type.code,
                                 'penalty_amount': str(i.violation_type.penalty_amount),
-                            }
+                            },
+                            'penalty_amount_snapshot': str(i.penalty_amount_snapshot),
                         }
                         for i in _items_with_types(v)
                     ],
@@ -2638,7 +2651,8 @@ class PendingViolationListView(APIView):
                                 'name':           i.violation_type.name,
                                 'code':           i.violation_type.code,
                                 'penalty_amount': str(i.violation_type.penalty_amount),
-                            }
+                            },
+                            'penalty_amount_snapshot': str(i.penalty_amount_snapshot),
                         }
                         for i in _items_with_types(v)
                     ],
