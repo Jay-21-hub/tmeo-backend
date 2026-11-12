@@ -36,6 +36,31 @@ class ViolationType(models.Model):
     def __str__(self):
         return f"{self.code} - {self.name}"
 
+class ViolationTypeFine(models.Model):
+    """
+    History of a ViolationType's fine. A row says "from `effective_from`, this
+    type's fine is `penalty_amount`". Used to price an offline-synced Enforcer
+    OVR by the fine in force when it was issued (see fine_history.py).
+    ViolationType.penalty_amount stays the CURRENT fine; items keep their own
+    penalty_amount_snapshot.
+    """
+    violation_type = models.ForeignKey(
+        ViolationType, on_delete=models.CASCADE, related_name='fine_history'
+    )
+    penalty_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    effective_from = models.DateTimeField(db_index=True)
+    changed_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='+'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-effective_from', '-id']
+
+    def __str__(self):
+        return f"{self.violation_type.code}: {self.penalty_amount} from {self.effective_from}"
+
+
 class Violation(models.Model):
     class Status(models.TextChoices):
         PENDING    = 'pending',    'Pending'

@@ -37,6 +37,7 @@ from accounts.identity import (
     enforcer_identity, assessor_identity,
 )
 from .views_sse import broadcast_lock_event
+from .fine_history import record_fine_change, record_initial_fine
 from .attribution import record_payment_confirmer
 # REQUIREMENT #8 (Analytics Year Comparison): a settled violation is moved
 # out of this app's own Violation table once archived (REQUIREMENT #2) and
@@ -139,6 +140,12 @@ class ViolationTypeListView(generics.ListCreateAPIView):
             return [permissions.IsAuthenticated(), IsAdminOrStaff()]
         return [permissions.IsAuthenticated()]
 
+    def perform_create(self, serializer):
+        # First fine-history row, so every type has a baseline from day one.
+        with transaction.atomic():
+            instance = serializer.save()
+            record_initial_fine(instance, self.request.user)
+
 
 class ViolationTypeDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ViolationTypeSerializer
@@ -159,7 +166,13 @@ class ViolationTypeDetailView(generics.RetrieveUpdateDestroyAPIView):
         # and what it was before. Existing violations keep their own snapshot.
         audited = ('name', 'code', 'category', 'is_active', 'penalty_amount')
         before = snapshot(serializer.instance, audited)
-        instance = serializer.save()
+        old_fine = serializer.instance.penalty_amount
+        with transaction.atomic():
+            instance = serializer.save()
+            if instance.penalty_amount != old_fine:
+                # Fine history: lets an offline-synced OVR be priced by the
+                # fine that was in force when it was issued.
+                record_fine_change(instance, old_fine, self.request.user)
         after = snapshot(instance, audited)
         log_action(
             user=self.request.user,

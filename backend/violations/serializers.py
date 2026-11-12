@@ -17,6 +17,7 @@ from accounts.identity import (
 )
 from .attribution import record_assessor
 from .upload_validation import validate_image_size
+from .fine_history import item_fine
 
 
 def _validate_gps_coordinate(value, low, high, label):
@@ -607,7 +608,7 @@ class ViolationDetailSerializer(GpsCoordinateValidationMixin, serializers.ModelS
             ViolationItem.objects.create(
                 violation=violation,
                 violation_type=vtype,
-                penalty_amount_snapshot=vtype.penalty_amount,
+                penalty_amount_snapshot=item_fine(vtype, violation),
             )
 
         violation.compute_total()
@@ -659,7 +660,7 @@ class ViolationDetailSerializer(GpsCoordinateValidationMixin, serializers.ModelS
                 ViolationItem.objects.create(
                     violation=instance,
                     violation_type=vtype,
-                    penalty_amount_snapshot=vtype.penalty_amount,
+                    penalty_amount_snapshot=item_fine(vtype, instance),
                 )
                 have.add(type_id)
             if instance.source != Violation.Source.IMPORTED:
