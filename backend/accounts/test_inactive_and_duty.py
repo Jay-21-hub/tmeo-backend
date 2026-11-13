@@ -56,6 +56,21 @@ class InactiveAccountAndDutyStatusTests(APITestCase):
         self.on_leave.refresh_from_db()
         self.assertNotEqual(self.on_leave.first_name, 'Changed')
 
+    def test_change_role_keeps_409_for_an_inactive_account(self):
+        res = self.client.post(
+            f'/api/auth/users/{self.staff.id}/change-role/',
+            {'new_role': 'enforcer', 'reason': 'Reassignment'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, 409)
+        self.assertEqual(res.json()['code'], 'account_inactive')
+        self.assertEqual(
+            res.json()['error'],
+            'Only an active account can change role. Reactivate the account first.',
+        )
+        self.staff.refresh_from_db()
+        self.assertEqual(self.staff.role, 'staff')
+
     def test_duty_status_cannot_be_written(self):
         res = self.client.patch(
             f'/api/auth/users/{self.enforcer.id}/',

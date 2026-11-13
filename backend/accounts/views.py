@@ -869,16 +869,8 @@ class ChangeUserRoleView(APIView):
 
     def post(self, request, pk):
         data = request.data
-        target = CustomUser.objects.filter(pk=pk).first()
-        if target and (
-            not target.is_active
-            or target.employment_status != CustomUser.EmploymentStatus.ACTIVE
-        ):
-            return Response(
-                {'detail': 'This account is inactive. The only change allowed is reactivation to Active.',
-                 'code': 'inactive'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # Inactive and separated accounts are refused inside change_user_role
+        # (409, code account_inactive). This view must not answer first.
         if any(k in data for k in self.FORBIDDEN_INPUT):
             return Response(
                 {'error': 'The ID number is assigned by the system and cannot be supplied.',
