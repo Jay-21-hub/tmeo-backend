@@ -24,6 +24,10 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
   const printConfirm = usePrintConfirmation()
   const currentUser = getUser()
   const [step, setStep] = useState(1)
+  // Excel-imported historical record (Admin -> Reports -> Import). It has no
+  // Enforcer and no OVR slip. Its data is locked like an Enforcer OVR, except
+  // that Staff may complete the vehicle Brand / Model and the Remarks.
+  const isImported = violationData?.source === 'imported'
 
   const [form, setForm] = useState({
     full_name: '', address: '', license_number: '', plate_number: '',
@@ -147,7 +151,10 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
   // Falls back to the live fine when the server sends no snapshot.
   const snapshotByTypeId = new Map(
     (violationData?.items || [])
-      .filter(i => i.violation_type?.id != null && i.penalty_amount_snapshot != null)
+      .filter(i => i.violation_type?.id != null && i.penalty_amount_snapshot != null
+        // Imported items hold a 0 placeholder, not a real fine: skip it so the
+        // violation falls back to its fine in the Violation Types list.
+        && !(isImported && Number(i.penalty_amount_snapshot) <= 0))
       .map(i => [i.violation_type.id, i.penalty_amount_snapshot])
   )
   const displayTypes = snapshotByTypeId.size
@@ -276,6 +283,12 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
 
   const validateStep2 = (f) => {
     const e = {}
+    // Imported: date, time and location are locked as imported (the logbook may
+    // have no time/location), so only the violations are checked.
+    if (isImported) {
+      if (selectedIds.length === 0) e.violations = 'Select at least one violation'
+      return e
+    }
     if (!f.date) e.date = 'Required'
     if (!f.time) e.time = 'Required'
     else if (to24Hour(f.time) === null) e.time = 'Use a valid time, e.g. 02:30 pm'
@@ -286,7 +299,9 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
   }
 
   const handleNextStep = () => {
-    if (step === 1) {
+    // Imported: every Step 1 field is locked except optional Brand/Model, so
+    // there is nothing for Staff to fix here — never block them on locked data.
+    if (step === 1 && !isImported) {
       const e = validateStep1(form)
       if (Object.keys(e).length) { setErrors(e); return }
     }
@@ -306,7 +321,8 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
   // A walk-in/no-OVR record was entered by Staff themselves, so it stays
   // fully editable even after being saved once (violationId becomes set,
   // but violationData — the prop for an EXISTING Enforcer OVR — never does).
-  const isEnforcerOVR = !!violationData
+  // An imported record is the exception: Brand / Model / Remarks are saved.
+  const isEnforcerOVR = !!violationData && !isImported
 
   // Time is a free-text "HH:MM am/pm" field (see AssessmentFormSteps), not
   // a native <input type="time">, so it is parsed defensively. An invalid
@@ -392,7 +408,15 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
   // OVR Number is intentionally never included here: it's read-only in the
   // UI for this case (physical, Enforcer-written OVR — business rule) and
   // must never be silently overwritten.
-  const persistEditableFields = (id) => api.patch(`/api/violations/${id}/`, buildEditableFields())
+  // Imported: ONLY Brand, Model and Remarks are sent, so nothing else on the
+  // record (date, violations, fine, violator, plate...) can be overwritten.
+  const buildImportedFields = () => ({
+    vehicle_brand: form.vehicle_brand,
+    vehicle_model: form.vehicle_model,
+    remarks: form.remarks.trim(),
+  })
+  const persistEditableFields = (id) =>
+    api.patch(`/api/violations/${id}/`, isImported ? buildImportedFields() : buildEditableFields())
 
   // Enforcer OVRs keep their original field record locked, but the internal
   // confiscated-document details are Staff's to complete. Only those fields

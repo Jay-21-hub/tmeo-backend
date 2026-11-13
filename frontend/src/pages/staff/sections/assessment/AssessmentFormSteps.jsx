@@ -107,6 +107,10 @@ export const LockedField = ({ label, value, className = '', id }) => (
   </Field>
 )
 
+// Excel-imported historical record: no Enforcer, no OVR slip. Everything is
+// locked except vehicle Brand / Model (Step 1) and Remarks (Step 3).
+const isImportedRecord = (v) => v?.source === 'imported'
+
 const readOnlyInput = { background: 'var(--slate-100)', color: 'var(--slate-600)', cursor: 'not-allowed', fontWeight: 600 }
 
 export const StepIndicator = ({ current }) => (
@@ -293,7 +297,7 @@ const VEHICLE_CATEGORY_ORDER = ['motorcycle', 'car', 'puv', 'truck', 'special']
 const VEHICLE_OTHER = '__other__'
 const uniqueSorted = (list) => Array.from(new Set(list)).sort()
 
-function VehicleSelectFields({ form, errors, onChange }) {
+function VehicleSelectFields({ form, errors, onChange, lockType = false }) {
   const { vehicles, loading } = useVehicleCatalog()
   const hasCatalog = vehicles.length > 0
   const [otherBrand, setOtherBrand] = useState(false)
@@ -320,6 +324,7 @@ function VehicleSelectFields({ form, errors, onChange }) {
         <div className="af-s6">
           <Field label="Vehicle Type" required error={errors.vehicle_type} htmlFor="vehicle_type">
             <input id="vehicle_type" className={`input ${errors.vehicle_type ? 'input-error' : ''}`} placeholder="e.g. Motorcycle"
+              readOnly={lockType} style={lockType ? readOnlyInput : undefined}
               value={form.vehicle_type} onChange={e => onChange('vehicle_type', e.target.value)} />
           </Field>
         </div>
@@ -340,6 +345,9 @@ function VehicleSelectFields({ form, errors, onChange }) {
   return (
     <>
       <div className="af-s6">
+        {lockType ? (
+          <LockedField id="vehicle_type" label="Vehicle Type" value={form.vehicle_type} />
+        ) : (
         <Field label="Vehicle Type" required error={errors.vehicle_type} htmlFor="vehicle_type">
           <select id="vehicle_type" className={`select ${errors.vehicle_type ? 'input-error' : ''}`} value={form.vehicle_type} disabled={busy}
             onChange={e => {
@@ -350,6 +358,7 @@ function VehicleSelectFields({ form, errors, onChange }) {
             {typeOptions.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </Field>
+        )}
       </div>
 
       <div className="af-s6">
@@ -409,6 +418,7 @@ const vehicleUseLabel = (v) => (v === 'private' ? 'Private' : v === 'public' ? '
 export function AssessmentStep1({ form, errors, lookupLoading, lookupDone, repeatInfo, violationData, onChange, onLookup, onLookupReset, onNext, onViewTicket, viewingTicketId }) {
   // Existing Enforcer OVR → original field record, locked. Walk-in → editable.
   const locked = !!violationData
+  const imported = isImportedRecord(violationData)   // locked, but Brand/Model are editable
   const [nameParts, setNameParts] = useState(() => splitName(form.full_name))
   const lastPushedRef = useRef(form.full_name)
 
@@ -439,7 +449,7 @@ export function AssessmentStep1({ form, errors, lookupLoading, lookupDone, repea
 
       {(
         <div style={{ padding: '12px 22px', borderBottom: '1px solid var(--slate-100)', background: 'var(--slate-50)', borderRadius: 'var(--radius-lg, 10px) var(--radius-lg, 10px) 0 0', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          {violationData ? (
+          {violationData && !imported ? (
             <>
               <div className="field" style={{ minWidth: 200 }}>
                 <label className="field-label" htmlFor="ovr_number">OVR Number</label>
@@ -447,6 +457,10 @@ export function AssessmentStep1({ form, errors, lookupLoading, lookupDone, repea
               </div>
               <span style={{ fontSize: 12, color: 'var(--slate-500)' }}>From the Enforcer's submitted OVR — original field record, read-only</span>
             </>
+          ) : imported ? (
+            <span style={{ fontSize: 12, color: 'var(--slate-500)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <User size={13} aria-hidden="true" /> Imported record — no OVR Number. Only the vehicle Brand / Model can be completed.
+            </span>
           ) : (
             <span style={{ fontSize: 12, color: 'var(--slate-500)', display: 'flex', alignItems: 'center', gap: 6 }}>
               <User size={13} aria-hidden="true" /> Walk-in complaint — no OVR Number (no physical OVR was issued in the field)
@@ -549,8 +563,10 @@ export function AssessmentStep1({ form, errors, lookupLoading, lookupDone, repea
             )}
           </div>
           {!locked && <VehicleSelectFields form={form} errors={errors} onChange={onChange} />}
+          {/* Imported: Vehicle Type is locked; Brand / Model list only that type's entries */}
+          {imported && <VehicleSelectFields form={form} errors={errors} onChange={onChange} lockType />}
         </div>
-        {locked && <VehicleReadout form={form} />}
+        {locked && !imported && <VehicleReadout form={form} />}
       </div>
 
       {/* C. CONFISCATION OF DOCUMENTS */}
@@ -581,6 +597,7 @@ export function AssessmentStep2({
   violationData, onChange, onVtSearch, onToggleId, onBack, onNext,
 }) {
   const locked = !!violationData
+  const imported = isImportedRecord(violationData)
   const selectedTypes = (violationTypes || []).filter(vt => selectedIds.includes(vt.id))
   return (
     <section className="af-panel" aria-labelledby="af-step2-title">
@@ -592,7 +609,7 @@ export function AssessmentStep2({
         {locked ? (
           <div className="af-grid">
             <div className="af-s3"><LockedField id="date" label="Date" value={form.date} /></div>
-            <div className="af-s3"><LockedField id="time" label="Time" value={form.time} /></div>
+            {!imported && <div className="af-s3"><LockedField id="time" label="Time" value={form.time} /></div>}
             <div className="af-s6"><LockedField id="place_of_violation" label="Location" value={form.place_of_violation} /></div>
           </div>
         ) : (
@@ -617,7 +634,7 @@ export function AssessmentStep2({
       </div>
 
       <div className="af-section" id="violations" tabIndex={-1}>
-        <SectionHead icon={ClipboardList} title="Violation Type" sub={locked ? "From the Enforcer's submitted OVR — read-only" : 'Select all applicable violations.'} />
+        <SectionHead icon={ClipboardList} title="Violation Type" sub={locked ? (imported ? 'From the imported record — read-only' : "From the Enforcer's submitted OVR — read-only") : 'Select all applicable violations.'} />
         {errors.violations && <p role="alert" style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--danger-600)', fontWeight: 600 }}>⚠ {errors.violations}</p>}
         {locked ? (
           <div className="af-vt-list">
@@ -626,7 +643,8 @@ export function AssessmentStep2({
             ) : selectedTypes.map(vt => (
               <div key={vt.id} className="af-vt-row" data-locked="true" data-checked="true">
                 <div className="af-vt-name">{vt.name}<div className="af-vt-code">{vt.code}</div></div>
-                <div className="af-vt-amt">₱{Number(vt.penalty_amount).toLocaleString()}</div>
+                {/* imported: a per-violation amount is shown only if the item has one */}
+                {(!imported || Number(vt.penalty_amount) > 0) && <div className="af-vt-amt">₱{Number(vt.penalty_amount).toLocaleString()}</div>}
               </div>
             ))}
           </div>
@@ -679,7 +697,7 @@ export function AssessmentStep2({
 
 /* ── STEP 3: Others / Remarks + Payment Details ── */
 export function AssessmentStep3({ form, errors, violationData, totalPenalty, formatCurrency, onChange, onBack, onNext }) {
-  const locked = !!violationData
+  const locked = !!violationData && !isImportedRecord(violationData)   // imported: Remarks editable
   return (
     <section className="af-panel" aria-labelledby="af-step3-title">
       <h2 id="af-step3-title" className="sr-only">Step 3: Others, remarks and payment details</h2>
@@ -752,6 +770,7 @@ const Row = ({ label, children }) => (
 /* ── STEP 4: Review (read-only; reads the SAME form state that is submitted) ── */
 export function AssessmentStep4({ form, violationData, selectedTypes, totalPenalty, formatCurrency, onBack, onConfirmPayment, loading, paid, onEditStep }) {
   const status = form.license_status
+  const imported = isImportedRecord(violationData)
   const docType = CONFISCATED_DOCUMENT_OPTIONS.find(o => o.value === form.confiscated_document_type)
   return (
     <section className="af-panel" aria-labelledby="af-step4-title">
@@ -765,7 +784,7 @@ export function AssessmentStep4({ form, violationData, selectedTypes, totalPenal
               <Row label="Address">{form.address}</Row>
               {form.registration_number && <Row label="Registration No.">{form.registration_number}</Row>}
               {form.vehicle_use && <Row label="Classification">{vehicleUseLabel(form.vehicle_use)}</Row>}
-              {violationData && <Row label="OVR Number">{form.ovr_number}</Row>}
+              {violationData && !imported && <Row label="OVR Number">{form.ovr_number}</Row>}
             </ReviewBlock>
             <ReviewBlock paid={paid} onEditStep={onEditStep} title="Vehicle Information" step={1}>
               <Row label="Plate Number">{form.plate_number}</Row>
@@ -791,7 +810,7 @@ export function AssessmentStep4({ form, violationData, selectedTypes, totalPenal
           </div>
           <div>
             <ReviewBlock paid={paid} onEditStep={onEditStep} title="Violation Details" step={2}>
-              <Row label="Date & Time">{`${form.date || ''} ${form.time || ''}`.trim()}</Row>
+              <Row label={imported ? 'Date' : 'Date & Time'}>{(imported ? form.date || '' : `${form.date || ''} ${form.time || ''}`).trim()}</Row>
               <Row label="Location">{form.place_of_violation}</Row>
               <Row label="Violation Type">{selectedTypes.map(v => v.name).join(', ')}</Row>
             </ReviewBlock>
@@ -799,7 +818,7 @@ export function AssessmentStep4({ form, violationData, selectedTypes, totalPenal
               <Row label="Fine Amount">{formatCurrency(totalPenalty)}</Row>
             </ReviewBlock>
             <ReviewBlock paid={paid} onEditStep={onEditStep} title="Others / Remarks" step={3}>
-              <Row label="Remarks">{violationData ? violationData.remarks : form.remarks}</Row>
+              <Row label="Remarks">{violationData && !imported ? violationData.remarks : form.remarks}</Row>
             </ReviewBlock>
             <ReviewBlock paid={paid} onEditStep={onEditStep} title="Payment Details" step={3}>
               <Row label="Amount Paid">{formatCurrency(totalPenalty)}</Row>
