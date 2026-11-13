@@ -6,31 +6,34 @@ import ViolationDetailModal from '../ViolationDetailModal'
 
 afterEach(cleanup)
 
-// The public API returns only violation_types. A stray date_issued (e.g. from an older
-// backend) must never be rendered: the public records show the violation and fine only.
-const record = {
-  date_issued: '2026-03-14T09:30:00+08:00',
-  violation_types: [
-    { name: 'No Helmet', category: 'Minor', description: 'Riding without a helmet', fine: 500 },
-    { name: 'No License', category: 'Major', description: 'Driving without a license', fine: 1500 },
-  ],
+const helmet = {
+  name: 'No Helmet', category: 'Minor', description: 'Riding without a helmet', fine: 500,
+}
+const license = {
+  name: 'No License', category: 'Major', description: 'Driving without a license', fine: 1500,
 }
 
-describe('public violation record (fines only, no dates)', () => {
-  it('card shows the violation, the extra-count and the total fine, but no date', () => {
-    const { container } = render(<PublicViolationCard record={record} />)
+describe('public violation record (one violation per entry)', () => {
+  it('card shows that violation and its own fine, not a merged total', () => {
+    const { container } = render(<PublicViolationCard record={helmet} />)
     expect(screen.getByText('No Helmet')).toBeTruthy()
-    expect(screen.getByText('+1 more')).toBeTruthy()
-    expect(screen.getByText('₱2,000')).toBeTruthy()
+    expect(screen.queryByText(/\+1 more/)).toBeNull()
+    expect(screen.getByText('₱500')).toBeTruthy()
+    expect(screen.queryByText('₱2,000')).toBeNull()
     expect(container.querySelector('.pub-vcard-date')).toBeNull()
-    expect(container.textContent).not.toMatch(/2026|Mar/)
   })
 
-  it('detail modal lists each type with its fine and the total, but no issue date', () => {
-    render(<ViolationDetailModal open onClose={() => {}} record={record} />)
+  it('a second violation is its own card', () => {
+    render(<PublicViolationCard record={license} />)
     expect(screen.getByText('No License')).toBeTruthy()
     expect(screen.getByText('₱1,500')).toBeTruthy()
-    expect(screen.getByText('₱2,000')).toBeTruthy()
+  })
+
+  it('detail modal shows that violation and its fine, and no issue date', () => {
+    render(<ViolationDetailModal open onClose={() => {}} record={license} />)
+    expect(screen.getByText('No License')).toBeTruthy()
+    expect(screen.getByText('₱1,500')).toBeTruthy()
+    expect(screen.queryByText(/total fine/i)).toBeNull()
     expect(screen.queryByText(/date issued/i)).toBeNull()
     expect(document.body.textContent).not.toMatch(/2026|March/)
   })

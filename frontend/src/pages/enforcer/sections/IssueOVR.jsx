@@ -9,6 +9,7 @@ import {
   buildOvrFormData, emptyForm, isFormDirty, manilaNowIso, mergeOcrIntoForm,
 } from './issue-ovr/helpers'
 import { filterTypesByVehicle, pruneSelectedIds } from '../../../utils/violationTypeFilter'
+import { hasPersonalDetails, hasVehicleDetails, splitViolatorName } from '../../../utils/savedViolator'
 import './IssueOVR.css'
 
 /**
@@ -33,15 +34,9 @@ import './IssueOVR.css'
  * backend enforces the same rule on create, so this is a convenience filter,
  * not the only check.
  *
- * Online Plate Number lookup (added alongside the existing License Number
- * lookup): on blur, the same violator-lookup endpoint is queried by
- * plate_number. If a matching historical vehicle record is found, Vehicle
- * Brand/Model/Type are suggested — but ONLY into fields that are still
- * empty. A value the enforcer already picked/typed is never overwritten
- * (same "fill blanks only" rule the License Number → Address autofill and
- * the OCR merge already follow). This is online-only, courtesy-only: a
- * failed or no-match lookup never blocks the form or destroys anything
- * typed.
+ * License lookup offers driver details. Plate lookup offers vehicle details.
+ * Nothing is copied until the enforcer clicks "Use saved details". Violations
+ * and license confiscation are never copied. Offline, the lookup is skipped.
  *
  * Date and time are read-only. The value on screen is a live clock; the
  * time that is actually recorded is stamped at the moment Submit is
@@ -147,11 +142,11 @@ export default function IssueOVR({ onSuccess, setPage }) {
   // is skipped); lookupSeqRef = newest request wins.
   const lookupKeyRef = useRef('')
   const lookupSeqRef = useRef(0)
-  // Plate Number lookup is a separate, independent request from the License
-  // Number one above — its own loading flag and its own "found" indicator
-  // (not the repeat-violator badge, which stays tied to License Number).
+  const licenseTimerRef = useRef(null)
+  const plateTimerRef = useRef(null)
   const [plateLookupLoading, setPlateLookupLoading] = useState(false)
-  const [vehicleFound, setVehicleFound] = useState(false)
+  const [personalSaved, setPersonalSaved] = useState(null)
+  const [vehicleSaved, setVehicleSaved] = useState(null)
   const [gps, setGps] = useState(() => (typeof navigator !== 'undefined' && navigator.geolocation ? 'locating' : 'unavailable'))
 
   /* ── data loading ── */
@@ -222,32 +217,52 @@ export default function IssueOVR({ onSuccess, setPage }) {
     return () => clearInterval(timer)
   }, [])
 
-  const handleLicenseLookup = async (licenseNumber) => {
-    const value = (licenseNumber || '').trim()
+  const runLicenseLookup = async (value) => {
     const key = value.toLowerCase()
-    if (!key) {
-      lookupSeqRef.current += 1; lookupKeyRef.current = ''
-      setLookupLoading(false); setRepeatInfo(null)
-      return
-    }
-    if (key === lookupKeyRef.current) return   // same value already checked
+    if (key === lookupKeyRef.current) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
     lookupKeyRef.current = key
     const seq = ++lookupSeqRef.current
     setLookupLoading(true)
     try {
       const res = await api.get(`/api/violations/violator-lookup/?license_number=${encodeURIComponent(value)}`)
-      if (seq !== lookupSeqRef.current) return  // a newer lookup superseded this one
+      if (seq !== lookupSeqRef.current) return
       const data = res.data
-      if (data?.found && data.match) {
-        setForm(f => ({ ...f, address: f.address || data.match.address || '' }))
-      }
+      setPersonalSaved(hasPersonalDetails(data?.personal) ? data.personal : null)
       setRepeatInfo(data?.violation_count > 0 ? data : null)
     } catch {
-      // lookup is a courtesy — never block the form on it. Allow a retry.
       if (seq === lookupSeqRef.current) lookupKeyRef.current = ''
     } finally {
       if (seq === lookupSeqRef.current) setLookupLoading(false)
     }
+  }
+
+  const handleLicenseLookup = (licenseNumber) => {
+    clearTimeout(licenseTimerRef.current)
+    const value = (licenseNumber || '').trim()
+    if (!value) {
+      lookupSeqRef.current += 1
+      lookupKeyRef.current = ''
+      setLookupLoading(false)
+      setRepeatInfo(null)
+      setPersonalSaved(null)
+      return
+    }
+    licenseTimerRef.current = setTimeout(() => runLicenseLookup(value), 400)
+  }
+
+  const applyPersonal = () => {
+    if (!personalSaved) return
+    const parts = splitViolatorName(personalSaved.violator_name)
+    setForm(f => ({
+      ...f,
+      ...(parts.last_name ? { last_name: parts.last_name } : {}),
+      ...(parts.first_name ? { first_name: parts.first_name } : {}),
+      ...(parts.middle_initial ? { middle_initial: parts.middle_initial } : {}),
+      ...(personalSaved.address ? { address: personalSaved.address } : {}),
+      ...(personalSaved.license_number ? { license_number: personalSaved.license_number } : {}),
+    }))
+    setPersonalSaved(null)
   }
 
   // Apply a scanned license: same fill-blanks-only merge as before, and then
@@ -264,27 +279,37 @@ export default function IssueOVR({ onSuccess, setPage }) {
   // endpoint as License Number, queried by plate_number instead. Only
   // suggests Vehicle Type/Brand/Model into fields that are currently
   // empty — a value the enforcer already selected/typed is left alone.
-  const handlePlateLookup = async (plateNumber) => {
-    if (!plateNumber?.trim()) { setVehicleFound(false); return }
-    if (!navigator.onLine) { setVehicleFound(false); return }
+  const runPlateLookup = async (plateNumber) => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
     setPlateLookupLoading(true)
     try {
-      const res = await api.get(`/api/violations/violator-lookup/?plate_number=${encodeURIComponent(plateNumber.trim())}`)
-      const data = res.data
-      if (data?.found && data.match) {
-        const m = data.match
-        setForm(f => ({
-          ...f,
-          vehicle_type: f.vehicle_type || m.vehicle_type || '',
-          vehicle_brand: f.vehicle_brand || m.vehicle_brand || '',
-          vehicle_model: f.vehicle_model || m.vehicle_model || '',
-        }))
-        setVehicleFound(!!(m.vehicle_brand || m.vehicle_model || m.vehicle_type))
-      } else {
-        setVehicleFound(false)
-      }
-    } catch { /* lookup is a courtesy — never block the form on it */ }
+      const res = await api.get(`/api/violations/violator-lookup/?plate_number=${encodeURIComponent(plateNumber)}`)
+      const vehicle = res.data?.vehicle
+      setVehicleSaved(hasVehicleDetails(vehicle) ? vehicle : null)
+    } catch { /* offline or unavailable — leave the form as typed */ }
     finally { setPlateLookupLoading(false) }
+  }
+
+  const handlePlateLookup = (plateNumber) => {
+    clearTimeout(plateTimerRef.current)
+    const value = (plateNumber || '').trim()
+    if (!value) { setVehicleSaved(null); return }
+    plateTimerRef.current = setTimeout(() => runPlateLookup(value), 400)
+  }
+
+  const applyVehicle = () => {
+    if (!vehicleSaved) return
+    const v = vehicleSaved
+    setForm(f => ({
+      ...f,
+      ...(v.plate_number ? { plate_number: v.plate_number } : {}),
+      ...(v.registration_number ? { registration_number: v.registration_number } : {}),
+      ...(v.vehicle_type ? { vehicle_type: v.vehicle_type } : {}),
+      ...(v.vehicle_brand ? { vehicle_brand: v.vehicle_brand } : {}),
+      ...(v.vehicle_model ? { vehicle_model: v.vehicle_model } : {}),
+      ...(v.vehicle_use ? { vehicle_use: v.vehicle_use } : {}),
+    }))
+    setVehicleSaved(null)
   }
 
   /* ── derived ── */
@@ -328,7 +353,7 @@ export default function IssueOVR({ onSuccess, setPage }) {
 
   const resetForm = () => {
     setStep(1); setSelectedIds([]); setFlagged({}); setError(''); setOfflineNotice(false); setSearch('')
-    setRepeatInfo(null); setVehicleFound(false); setSubmitted(null)
+    setRepeatInfo(null); setPersonalSaved(null); setVehicleSaved(null); setSubmitted(null)
     lookupSeqRef.current += 1; lookupKeyRef.current = ''; setLookupLoading(false)
     setForm(emptyForm())
     if (navigator.geolocation) setGps('locating')
@@ -454,7 +479,9 @@ export default function IssueOVR({ onSuccess, setPage }) {
           {step === 1 && (
             <StepDriverVehicle form={form} setForm={setForm} errors={errors}
               repeatInfo={repeatInfo} lookupLoading={lookupLoading} onLookup={handleLicenseLookup}
-              plateLookupLoading={plateLookupLoading} vehicleFound={vehicleFound} onPlateLookup={handlePlateLookup}
+              personalSaved={!!personalSaved} onUsePersonal={applyPersonal}
+              plateLookupLoading={plateLookupLoading} vehicleSaved={!!vehicleSaved} onUseVehicle={applyVehicle}
+              onPlateLookup={handlePlateLookup}
               onApplyOcr={handleApplyOcr} />
           )}
           {step === 2 && (

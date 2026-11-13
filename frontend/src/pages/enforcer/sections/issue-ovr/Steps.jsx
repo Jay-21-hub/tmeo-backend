@@ -3,6 +3,7 @@ import { Calendar, Clock, ImagePlus, Pencil, ScanLine, Search } from 'lucide-rea
 import { Alert, Button, Field, ReviewRow, ReviewSection, TextInput, Textarea } from '../../../../components/ui'
 import { ErrorState } from '../../../../components/ui/States'
 import { toTitleCase } from '../../../../utils/helpers'
+import PreviousRecordPrompt from '../../../../components/common/PreviousRecordPrompt'
 import { formatScanFailure, hasReadableLicense } from '../../../../utils/licenseScan'
 import LicenseScanner from './LicenseScanner'
 import LicensePhotoUpload from './LicensePhotoUpload'
@@ -56,7 +57,8 @@ function SegmentedField({ name, label, value, options, onChange }) {
  * of truth and nothing to type twice. */
 export function StepDriverVehicle({
   form, setForm, errors, repeatInfo, lookupLoading, onLookup, onApplyOcr,
-  plateLookupLoading, vehicleFound, onPlateLookup,
+  personalSaved, onUsePersonal,
+  plateLookupLoading, vehicleSaved, onUseVehicle, onPlateLookup,
 }) {
   const [scanOpen, setScanOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
@@ -163,12 +165,13 @@ export function StepDriverVehicle({
           </Field>
 
           <Field label="License no."
-            helper={lookupLoading ? 'Checking records…' : 'Leave the field to check for earlier violations.'}>
+            helper={lookupLoading ? 'Checking records…' : 'A matching license can offer this driver’s saved details.'}>
             {id => <TextInput id={id} className="mono" value={form.license_number} placeholder="A01-23-456789" autoComplete="off"
-              onChange={e => set({ license_number: e.target.value })}
+              onChange={e => { set({ license_number: e.target.value }); onLookup(e.target.value) }}
               onBlur={e => onLookup(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onLookup(form.license_number) } }} />}
           </Field>
+          <PreviousRecordPrompt visible={personalSaved} onUse={onUsePersonal} />
 
           {repeatInfo?.violation_count > 0 && (
             <Alert tone="warning" title="Repeat violator">
@@ -200,10 +203,10 @@ export function StepDriverVehicle({
         <div className="ovr-stack">
           <div className="ovr-grid ovr-grid--2">
             <Field label="Plate / body no."
-              helper={plateLookupLoading ? 'Checking records…' : vehicleFound ? 'Vehicle information found — check Brand/Model below.' : 'Leave the field to check for a matching vehicle on record.'}>
+              helper={plateLookupLoading ? 'Checking records…' : 'A matching plate can offer this vehicle’s saved details.'}>
               {id => <TextInput id={id} className="mono ovr-plate" value={form.plate_number} placeholder="ABC 1234"
                 autoCapitalize="characters" autoComplete="off"
-                onChange={e => set({ plate_number: e.target.value.toUpperCase() })}
+                onChange={e => { const plate = e.target.value.toUpperCase(); set({ plate_number: plate }); onPlateLookup?.(plate) }}
                 onBlur={e => onPlateLookup?.(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onPlateLookup?.(form.plate_number) } }} />}
             </Field>
@@ -212,6 +215,7 @@ export function StepDriverVehicle({
                 autoComplete="off" onChange={e => set({ registration_number: e.target.value.toUpperCase() })} />}
             </Field>
           </div>
+          <PreviousRecordPrompt visible={vehicleSaved} onUse={onUseVehicle} />
 
           <VehicleFields form={form} setForm={setForm} errors={errors} />
 

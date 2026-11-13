@@ -473,6 +473,43 @@ class UserDetailView(APIView):
                 {'error': 'User not found.'},
                 status=status.HTTP_404_NOT_FOUND
             )
+        if 'duty_status' in request.data or 'status' in request.data:
+            return Response(
+                {'duty_status': 'Duty status is calculated from the duty schedule and cannot be changed here.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Inactive, or no longer employed as active: only reactivation is allowed.
+        locked = (
+            not user.is_active
+            or user.employment_status != CustomUser.EmploymentStatus.ACTIVE
+        )
+        if locked:
+            extra = set(request.data.keys()) - {'employment_status'}
+            if extra or request.data.get('employment_status') != CustomUser.EmploymentStatus.ACTIVE:
+                return Response(
+                    {'detail': 'This account is inactive. The only change allowed is reactivation to Active.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            user.employment_status = CustomUser.EmploymentStatus.ACTIVE
+            user.is_active = True
+            user.save(update_fields=['employment_status', 'is_active'])
+            log_action(
+                user        = request.user,
+                action      = 'UPDATE',
+                module      = 'Accounts',
+                description = f'Reactivated account: {user.email}',
+                request     = request,
+                target_type = 'User',
+                target_id   = user.id,
+                details     = {
+                    'target_user': user.full_name,
+                    'email':       user.email,
+                    'role':        user.role,
+                    'emp_status':  user.employment_status,
+                    'updated_by':  request.user.full_name,
+                },
+            )
+            return Response(UserSerializer(user).data)
         before = snapshot(user, ('full_name', 'email', 'role', 'employment_status', 'duty_status', 'badge_number'))
         old_photo_name = (
             user.profile_photo.name
@@ -832,6 +869,16 @@ class ChangeUserRoleView(APIView):
 
     def post(self, request, pk):
         data = request.data
+        target = CustomUser.objects.filter(pk=pk).first()
+        if target and (
+            not target.is_active
+            or target.employment_status != CustomUser.EmploymentStatus.ACTIVE
+        ):
+            return Response(
+                {'detail': 'This account is inactive. The only change allowed is reactivation to Active.',
+                 'code': 'inactive'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if any(k in data for k in self.FORBIDDEN_INPUT):
             return Response(
                 {'error': 'The ID number is assigned by the system and cannot be supplied.',

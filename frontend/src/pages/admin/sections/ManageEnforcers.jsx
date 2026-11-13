@@ -7,7 +7,7 @@ import { useToast } from '../../../context/useToast'
 import StatCard from '../../../components/ui/StatCard'
 import Alert from '../../../components/ui/Alert'
 
-import { ALL_STATUSES } from './enforcers/enforcerStatus'
+import { DUTY_STATUS_OPTIONS, dutyStatusLabel } from './enforcers/enforcerStatus'
 import EnforcersTable from './enforcers/EnforcersTable'
 import EnforcerMobileList from './enforcers/EnforcerMobileCard'
 import EnforcerViewModal from './enforcers/EnforcerViewModal'
@@ -32,7 +32,6 @@ export default function ManageEnforcers() {
   const [page, setPage] = useState(1)
 
   const [viewData, setViewData] = useState(null)
-  const [statusHistory] = useState([])
   const [deactConfirm, setDeactConfirm] = useState(null)
 
   /* ── Fetch enforcers ── */
@@ -59,26 +58,13 @@ export default function ManageEnforcers() {
       (e.full_name || '').toLowerCase().includes(q) ||
       (e.enforcer_id || '').toLowerCase().includes(q) ||
       (e.badge_number || '').toLowerCase().includes(q)
-    const matchStatus = !statusFilter || e.status === statusFilter
+    const matchStatus = !statusFilter || dutyStatusLabel(e) === statusFilter
     return matchSearch && matchStatus
   })
   const totalPages = Math.ceil(filtered.length / PER_PAGE)
   const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
-  /* ── View / status change ── */
   const openView = (enforcer) => setViewData(enforcer)
-
-  const handleStatusChange = async (enforcerId, newStatus) => {
-    setEnforcers(prev => prev.map(e => e.id === enforcerId ? { ...e, status: newStatus } : e))
-    setViewData(prev => prev ? { ...prev, status: newStatus } : prev)
-    try {
-      await api.patch(`/api/auth/users/${enforcerId}/`, { employment_status: newStatus.toLowerCase() })
-      showToast('Status updated!')
-    } catch {
-      showToast('Failed to update status.', 'error')
-      fetchData()
-    }
-  }
 
   /* ── Deactivate ── */
   const confirmDeactivate = async () => {
@@ -86,8 +72,8 @@ export default function ManageEnforcers() {
     setDeactConfirm(null)
     try {
       await api.patch(`/api/auth/users/${enforcer.id}/`, { employment_status: 'suspended' })
-      setEnforcers(prev => prev.map(e => e.id === enforcer.id ? { ...e, status: 'Suspended' } : e))
       showToast('Enforcer deactivated.')
+      fetchData()
     } catch { showToast('Failed to deactivate.', 'error') }
   }
 
@@ -150,7 +136,7 @@ export default function ManageEnforcers() {
               </div>
               <select className="filter-select" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1) }}>
                 <option value="">All Statuses</option>
-                {ALL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                {DUTY_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
           </div>
@@ -177,10 +163,7 @@ export default function ManageEnforcers() {
 
       {/* Modals */}
       {viewData && (
-        <EnforcerViewModal
-          enforcer={viewData} statusHistory={statusHistory}
-          onStatusChange={handleStatusChange} onClose={() => setViewData(null)}
-        />
+        <EnforcerViewModal enforcer={viewData} onClose={() => setViewData(null)} />
       )}
 
       <EnforcerDeactivateModal enforcer={deactConfirm} onConfirm={confirmDeactivate} onCancel={() => setDeactConfirm(null)} />

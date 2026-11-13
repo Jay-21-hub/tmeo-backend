@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { X, Printer } from 'lucide-react'
 import AssessmentDirectPrint from './AssessmentDirectPrint'
+import { shown, orNumberDisplay, receivedByDisplay, withReason } from './ticketDisplay'
 
 const Row = ({ label, value, danger }) => (
   <div>
     <p style={{ margin: 0, fontSize: 11, color: 'var(--slate-400)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</p>
-    <p style={{ margin: '2px 0 0', fontSize: 14, color: danger ? 'var(--danger-600)' : 'var(--slate-950)', fontWeight: 600 }}>{value || '—'}</p>
+    <p style={{ margin: '2px 0 0', fontSize: 14, color: danger ? 'var(--danger-600)' : 'var(--slate-950)', fontWeight: 600 }}>{value || '— Not provided'}</p>
   </div>
 )
 
@@ -50,27 +51,34 @@ export default function AssessmentTicketModal({ ticket, formatCurrency, onClose,
         <div style={{ padding: '20px 24px' }}>
           <p className="text-label" style={{ marginBottom: 10 }}>Violator Information</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
-            {[['Full Name', ticket.full_name], ['Address', ticket.address], ['License Number', ticket.license_number], ['License Status', ticket.license_status], ['Plate Number', ticket.plate_number], ['Registration No.', ticket.registration_number], ['OVR Number', ticket.ovr_number]].map(([l, v]) => <Row key={l} label={l} value={v} />)}
+            {[['Full Name', ticket.full_name], ['Address', ticket.address], ['License Number', ticket.license_number], ['License Status', ticket.license_status], ['Plate Number', ticket.plate_number], ['Registration No.', ticket.registration_number]].map(([l, v]) => <Row key={l} label={l} value={shown(v)} />)}
+            <Row label="OVR Number" value={shown(ticket.ovr_number, ticket.source === 'staff_walk_in' ? 'Not issued for a walk-in' : 'Not provided')} />
           </div>
 
           <div style={{ paddingTop: 16, borderTop: '1px solid var(--slate-100)', marginBottom: 20 }}>
             <p className="text-label" style={{ marginBottom: 10 }}>Violation Details</p>
-            <div style={{ marginBottom: 10 }}><Row label="Violations" value={ticket.violations} /></div>
+            <div style={{ marginBottom: 10 }}><Row label="Violations" value={shown(ticket.violations)} /></div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              {[['Vehicle Type', ticket.vehicle_type], ['Date', ticket.date], ['Time', ticket.time]].map(([l, v]) => <Row key={l} label={l} value={v} />)}
-              <div style={{ gridColumn: '1 / -1' }}><Row label="Place of Violation" value={ticket.place_of_violation} /></div>
+              {[['Vehicle Type', ticket.vehicle_type], ['Date', ticket.date], ['Time', ticket.time]].map(([l, v]) => <Row key={l} label={l} value={shown(v, 'Not recorded')} />)}
+              <div style={{ gridColumn: '1 / -1' }}><Row label="Place of Violation" value={shown(ticket.place_of_violation)} /></div>
             </div>
           </div>
 
           <div style={{ paddingTop: 16, borderTop: '1px solid var(--slate-100)', marginBottom: 20 }}>
             <p className="text-label" style={{ marginBottom: 10 }}>Penalty &amp; Payment</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              <Row label="Penalty Amount" value={formatCurrency(ticket.penalty_amount)} danger />
-              <Row label="Amount Paid" value={ticket.amount_paid ? formatCurrency(ticket.amount_paid) : '—'} />
-              <Row label="O.R. Number" value={ticket.or_number} />
-              <Row label="Date Paid" value={ticket.date_paid} />
-              <Row label="Received By" value={ticket.received_by} />
-              <Row label="Assessed By" value={ticket.assessed_by} />
+              <Row label="Penalty Amount" value={ticket.penalty_amount ? formatCurrency(ticket.penalty_amount) : withReason('Not assessed')} danger />
+              <Row label="Amount Paid" value={ticket.amount_paid ? formatCurrency(ticket.amount_paid) : withReason(isPaid ? 'Not recorded' : 'Not paid yet')} />
+              <Row label="O.R. Number" value={orNumberDisplay(ticket.payment_status || ticket.status, ticket.assessment?.or_number || ticket.or_number)} />
+              <Row label="Date Paid" value={ticket.date_paid ? shown(ticket.date_paid) : withReason(isPaid ? 'Not recorded' : 'Not paid yet')} />
+              <Row label="Received By" value={receivedByDisplay({
+                acknowledgment: ticket.assessment?.received_by,
+                issuerName: ticket.enforcer?.full_name || '',
+                recordedAtLabel: ticket.date_issued
+                  ? new Date(ticket.date_issued).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                  : [ticket.date, ticket.time].filter(Boolean).join(' '),
+              })} />
+              <Row label="Assessed By" value={shown(ticket.assessed_by, 'Not recorded')} />
             </div>
           </div>
 

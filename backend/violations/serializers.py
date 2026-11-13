@@ -702,37 +702,27 @@ class AssessmentSerializer(serializers.ModelSerializer):
 
 class PublicViolationSerializer(serializers.ModelSerializer):
     """
-    Privacy-conscious serializer for the public landing page.
+    One public card per violation item, not per ticket.
 
-    Deliberately excludes everything identifying the violator, the vehicle,
-    the enforcer, exact GPS, or the location/area of the violation: no
-    violator_name, license_number, plate_number, address, location,
-    latitude/longitude, remarks, assessment_notes, image, enforcer, status,
-    and no internal ids or timestamps (id, date_issued, updated_at), so the
-    public feed cannot be used to enumerate records or infer when a ticket
-    was issued. The public cards show the violation type(s) and fine only.
+    A ticket with several violation types becomes several feed rows, each
+    with that type's own name and prescribed fine. Nothing identifying the
+    violator, the vehicle, the enforcer, the place, or the time is included:
+    no name, license, plate, address, location, GPS, remarks, image, status,
+    and no ids or timestamps.
 
-    Fine/penalty: sourced from ViolationItem.penalty_amount_snapshot, NOT
-    Violation.penalty_amount. penalty_amount_snapshot is the official
-    ViolationType.penalty_amount as it stood when this ticket was written —
-    a per-violation-type prescribed fine. Violation.penalty_amount, by
-    contrast, is a case-specific total that staff can override during
-    assessment, so it is never safe to expose publicly as "the" fine.
+    Fine comes from ViolationItem.penalty_amount_snapshot (the type's fine
+    when the ticket was written), never from the case-adjusted
+    Violation.penalty_amount.
     """
-    violation_types = serializers.SerializerMethodField()
+    name = serializers.CharField(source='violation_type.name', read_only=True)
+    category = serializers.CharField(source='violation_type.category', read_only=True)
+    description = serializers.CharField(source='violation_type.description', read_only=True)
+    fine = serializers.SerializerMethodField()
 
-    def get_violation_types(self, obj):
-        return [
-            {
-                'name': item.violation_type.name,
-                'category': item.violation_type.category,
-                'description': item.violation_type.description,
-                'fine': float(item.penalty_amount_snapshot),
-            }
-            for item in _items_with_types(obj)
-        ]
+    def get_fine(self, obj):
+        return float(obj.penalty_amount_snapshot)
 
     class Meta:
-        model = Violation
-        fields = ['violation_types']
+        model = ViolationItem
+        fields = ['name', 'category', 'description', 'fine']
         read_only_fields = fields

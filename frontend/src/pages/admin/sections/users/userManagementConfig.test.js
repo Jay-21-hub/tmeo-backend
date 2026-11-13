@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  getRoleChangeTarget, canChangeRole, ROLE_CHANGE_REASON_MAX, SEPARATED_EMPLOYMENT_STATUSES,
+  getRoleChangeTarget, canChangeRole, accountIsLocked, ROLE_CHANGE_REASON_MAX, SEPARATED_EMPLOYMENT_STATUSES,
 } from './userManagementConfig'
 
 describe('getRoleChangeTarget', () => {
@@ -41,9 +41,13 @@ describe('canChangeRole', () => {
       expect(canChangeRole({ ...base, employment_status: status }, 1)).toBe(false)
     }
   })
-  it('does not treat on_leave/suspended as separated (backend decides)', () => {
-    expect(canChangeRole({ ...base, employment_status: 'on_leave' }, 1)).toBe(true)
-    expect(canChangeRole({ ...base, employment_status: 'suspended' }, 1)).toBe(true)
+  it('locks the edit form when login or employment is not active', () => {
+    expect(accountIsLocked({ ...base, is_active: false })).toBe(true)
+    expect(accountIsLocked({ ...base, employment_status: 'on_leave' })).toBe(true)
+    expect(accountIsLocked({ ...base, employment_status: 'suspended' })).toBe(true)
+    expect(accountIsLocked(base)).toBe(false)
+    expect(canChangeRole({ ...base, employment_status: 'on_leave' }, 1)).toBe(false)
+    expect(canChangeRole({ ...base, employment_status: 'suspended' }, 1)).toBe(false)
   })
   it('handles a missing user', () => {
     expect(canChangeRole(null, 1)).toBe(false)

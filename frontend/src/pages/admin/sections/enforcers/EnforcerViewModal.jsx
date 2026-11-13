@@ -1,11 +1,10 @@
 import { User, Hash, Phone, MapPin, Calendar, FileText } from 'lucide-react'
 import Modal from '../../../../components/ui/Modal'
 import Button from '../../../../components/ui/Button'
-import { Select } from '../../../../components/ui/Field'
 import { getInitials } from '../../../../utils/helpers'
-import { EnforcerStatusBadge, ALL_STATUSES } from './enforcerStatus'
+import { EnforcerStatusBadge, dutyStatusLabel } from './enforcerStatus'
 
-export default function EnforcerViewModal({ enforcer, statusHistory, onStatusChange, onClose }) {
+export default function EnforcerViewModal({ enforcer, onClose }) {
   if (!enforcer) return null
 
   const fullName = enforcer.full_name || `${enforcer.last_name}, ${enforcer.first_name} ${enforcer.middle_name || ''}`.trim()
@@ -33,7 +32,7 @@ export default function EnforcerViewModal({ enforcer, statusHistory, onStatusCha
         <div>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--slate-950)' }}>{fullName || '—'}</h3>
           <div style={{ marginTop: 6 }}>
-            <EnforcerStatusBadge status={enforcer.status} />
+            <EnforcerStatusBadge status={dutyStatusLabel(enforcer)} />
           </div>
         </div>
       </div>
@@ -53,36 +52,9 @@ export default function EnforcerViewModal({ enforcer, statusHistory, onStatusCha
         })}
       </div>
 
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--slate-100)' }}>
-        <p className="text-label" style={{ marginBottom: 12 }}>Change Status</p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <Select value={enforcer.status} onChange={e => onStatusChange(enforcer.id, e.target.value)} style={{ maxWidth: 200 }}>
-            {ALL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </Select>
-        </div>
-      </div>
-
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--slate-100)' }}>
-        <p className="text-label" style={{ marginBottom: 12 }}>Status History</p>
-        {statusHistory.length === 0 ? (
-          <p className="text-caption">No status changes recorded.</p>
-        ) : (
-          <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-            {statusHistory.map((h, i) => (
-              <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '10px 0', borderBottom: '1px solid var(--slate-50)' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--blue-600)', marginTop: 4, flexShrink: 0 }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <EnforcerStatusBadge status={h.new_status} />
-                    <span className="text-caption">{h.changed_at ? new Date(h.changed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span>
-                  </div>
-                  <p className="text-caption" style={{ margin: '3px 0 0' }}>Changed by {h.changed_by || 'Admin'}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <p className="text-caption" style={{ marginTop: 16 }}>
+        Duty status follows today’s assigned shift in Asia/Manila. On Duty means the current time is inside that shift. It cannot be changed by hand.
+      </p>
     </Modal>
   )
 }

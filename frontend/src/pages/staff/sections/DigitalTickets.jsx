@@ -14,6 +14,7 @@ import AssessmentDirectPrint from './assessment/AssessmentDirectPrint'
 import PrintConfirmModal from '../../../components/print/PrintConfirmModal'
 import usePrintConfirmation from '../../../components/print/usePrintConfirmation'
 import { buildReceiptTicket } from './assessment/receiptTicket'
+import { shown, orNumberDisplay, receivedByDisplay, withReason } from './assessment/ticketDisplay'
 import { API } from '../../../constants'
 import './DigitalTickets.css'
 
@@ -101,11 +102,37 @@ function SectionHeading({ icon, tone, children }) {
 
 const DTM_EXIT_FALLBACK_MS = 400 // safety net only; the real signal is onAnimationEnd
 
+const LICENSE_LABELS = {
+  confiscated: 'Confiscated',
+  not_confiscated: 'Not confiscated',
+  other_documents: 'Other documents',
+}
+const USE_LABELS = { private: 'Private', public: 'Public' }
+
+function issuerName(ticket) {
+  if (ticket.enforcer && typeof ticket.enforcer === 'object') return ticket.enforcer.full_name || ''
+  if (ticket.enforcer_name && ticket.enforcer_name !== '—') return ticket.enforcer_name
+  if (ticket.assessed_by && typeof ticket.assessed_by === 'object') return ticket.assessed_by.full_name || ''
+  return ''
+}
+
 function TicketDetailModal({ ticket, printing, onClose, onPrint }) {
   const panelRef = useRef(null)
   const closeRef = useRef(null)
   const [closing, setClosing] = useState(false)
   const closedRef = useRef(false)
+  const [detail, setDetail] = useState(null)
+  const [detailError, setDetailError] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    setDetail(null)
+    setDetailError(false)
+    api.get(`/api/violations/${ticket.id}/`)
+      .then((res) => { if (alive) setDetail(res.data) })
+      .catch(() => { if (alive) setDetailError(true) })
+    return () => { alive = false }
+  }, [ticket.id])
 
   const finishClose = useCallback(() => {
     if (closedRef.current) return
@@ -149,6 +176,12 @@ function TicketDetailModal({ ticket, printing, onClose, onPrint }) {
     }
   }, [requestClose])
 
+  const view = detail || ticket
+  const paid = String(view.status || '').toLowerCase() === 'paid'
+  const orValue = view.assessment?.or_number || view.or_number
+  const recorded = formatDateTime(view.date_issued || view.created_at)
+  const ovrReason = view.source === 'staff_walk_in' ? 'Not issued for a walk-in' : 'Not provided'
+
   return (
     <div
       className={`dtm-overlay${closing ? ' is-closing' : ''}`}
@@ -175,36 +208,44 @@ function TicketDetailModal({ ticket, printing, onClose, onPrint }) {
         <div className="dtm-body">
           <section className="dtm-section">
             <SectionHeading icon={User} tone="blue">Violator Information</SectionHeading>
+            {!detail && !detailError && <p className="text-caption">Loading the full ticket…</p>}
             <div className="dtm-grid">
-              <Field label="Full Name">{ticket.violator_name}</Field>
-              <Field label="Address">{ticket.address}</Field>
-              <Field label="License Number">{ticket.license_number}</Field>
-              <Field label="License Status">{ticket.license_status}</Field>
-              <Field label="Plate Number">{ticket.plate_number}</Field>
-              <Field label="Registration No.">{ticket.registration_number}</Field>
-              <Field label="OVR Number">{ticket.ovr_number}</Field>
+              <Field label="Full Name">{shown(view.violator_name)}</Field>
+              <Field label="Address">{shown(view.address)}</Field>
+              <Field label="License Number">{shown(view.license_number)}</Field>
+              <Field label="License Status">{shown(LICENSE_LABELS[view.license_status] || view.license_status)}</Field>
+              <Field label="Plate Number">{shown(view.plate_number)}</Field>
+              <Field label="Registration No.">{shown(view.registration_number)}</Field>
+              <Field label="Vehicle Use">{shown(USE_LABELS[view.vehicle_use] || view.vehicle_use)}</Field>
+              <Field label="OVR Number">{shown(view.ovr_number, ovrReason)}</Field>
             </div>
           </section>
 
           <section className="dtm-section">
             <SectionHeading icon={FileText} tone="green">Violation Details</SectionHeading>
             <div className="dtm-grid">
-              <Field label="Violations" full>{getViolationNames(ticket)}</Field>
-              <Field label="Vehicle Type">{ticket.vehicle_type}</Field>
-              <Field label="Enforcer">{getEnforcerName(ticket)}</Field>
-              <Field label="Date Issued">{formatDate(ticket.date_issued)}</Field>
-              {/* Date Paid lives on the separate Assessment record — distinct from
-                  Date Issued (when the Enforcer wrote the OVR). Server-generated. */}
-              <Field label="Date Paid">{formatDate(ticket.date_paid)}</Field>
-              <Field label="Location" full>{ticket.location}</Field>
+              <Field label="Violations" full>{shown(getViolationNames(view) === '—' ? '' : getViolationNames(view))}</Field>
+              <Field label="Vehicle Type">{shown(view.vehicle_type)}</Field>
+              <Field label="Vehicle Brand">{shown(view.vehicle_brand)}</Field>
+              <Field label="Vehicle Model">{shown(view.vehicle_model)}</Field>
+              <Field label="Enforcer">{shown(getEnforcerName(view) === '—' ? issuerName(view) : getEnforcerName(view), 'Not recorded')}</Field>
+              <Field label="Date Issued">{view.date_issued ? formatDate(view.date_issued) : withReason('Not recorded')}</Field>
+              <Field label="Date Paid">{(view.assessment?.date_paid || view.date_paid) ? formatDate(view.assessment?.date_paid || view.date_paid) : withReason(paid ? 'Not recorded' : 'Not paid yet')}</Field>
+              <Field label="Location" full>{shown(view.location)}</Field>
             </div>
           </section>
 
           <section className="dtm-section">
             <SectionHeading icon={CreditCard} tone="gold">Payment Details</SectionHeading>
             <div className="dtm-grid dtm-grid--keep">
-              <Field label="Fine Amount"><span className="dtm-fine">{formatCurrency(ticket.penalty_amount)}</span></Field>
-              <Field label="Status"><StatusBadge status={ticket.status} /></Field>
+              <Field label="Fine Amount"><span className="dtm-fine">{view.penalty_amount === null || view.penalty_amount === undefined || view.penalty_amount === '' ? withReason('Not assessed') : formatCurrency(view.penalty_amount)}</span></Field>
+              <Field label="O.R. Number">{orNumberDisplay(view.status, orValue)}</Field>
+              <Field label="Received by">{receivedByDisplay({
+                acknowledgment: view.assessment?.received_by,
+                issuerName: issuerName(view),
+                recordedAtLabel: recorded,
+              })}</Field>
+              <Field label="Status">{view.status ? <StatusBadge status={view.status} /> : withReason('Not recorded')}</Field>
             </div>
           </section>
         </div>

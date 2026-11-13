@@ -516,6 +516,8 @@ class ViolatorLookupView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        if getattr(request.user, 'role', None) not in ('enforcer', 'staff', 'admin'):
+            return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         license_number = (request.query_params.get('license_number') or '').strip()
         plate_number = (request.query_params.get('plate_number') or '').strip()
 
@@ -533,12 +535,44 @@ class ViolatorLookupView(APIView):
 
         qs = Violation.objects.filter(match_q).order_by('-date_issued')
 
+        personal = None
+        if license_number:
+            person = (
+                Violation.objects.filter(license_number__iexact=license_number)
+                .order_by('-date_issued')
+                .first()
+            )
+            if person:
+                personal = {
+                    'violator_name': person.violator_name,
+                    'address': person.address,
+                    'license_number': person.license_number,
+                }
+        vehicle = None
+        if plate_number:
+            car = (
+                Violation.objects.filter(plate_number__iexact=plate_number)
+                .order_by('-date_issued')
+                .first()
+            )
+            if car:
+                vehicle = {
+                    'plate_number': car.plate_number,
+                    'registration_number': car.registration_number,
+                    'vehicle_type': car.vehicle_type,
+                    'vehicle_brand': car.vehicle_brand,
+                    'vehicle_model': car.vehicle_model,
+                    'vehicle_use': car.vehicle_use,
+                }
+
         if not qs.exists():
             return Response({
                 'found': False,
                 'violation_count': 0,
                 'is_repeat_offender': False,
                 'match': None,
+                'personal': personal,
+                'vehicle': vehicle,
                 'history': [],
             })
 
@@ -591,6 +625,10 @@ class ViolatorLookupView(APIView):
                 'vehicle_brand':       latest.vehicle_brand,
                 'vehicle_model':       latest.vehicle_model,
             },
+            # License fills driver details only. Plate fills vehicle details only.
+            # Confiscation and the violations on the old ticket are not included.
+            'personal': personal,
+            'vehicle': vehicle,
             'history': history,
         })
 
@@ -934,17 +972,17 @@ class ViolationListView(generics.ListAPIView):
 
 class PublicViolationListView(generics.ListAPIView):
     """
-    Read-only, unauthenticated feed for the public landing page.
+    Read-only, unauthenticated feed for the public Violation Updates section.
 
-    Eligibility: a violation only appears here once it has actually been
-    paid — status 'paid'. There is no separate "published" flag; 'paid'
-    is the real, already-existing finalized state, so nothing new was
-    invented for this.
+    Eligibility is unchanged: status 'paid' only. Each ViolationItem on a
+    paid ticket is its own row, so a ticket with several violations is not
+    returned as one merged entry. Filtering by violation_type matches that
+    item, not the whole ticket.
 
-    Only public-safe fields are ever returned — see PublicViolationSerializer.
+    Only public-safe fields are returned — see PublicViolationSerializer.
 
     Date filters (date, date_from, date_to) are intentionally NOT supported:
-    the response no longer exposes when a ticket was issued, and a date filter
+    the response does not expose when a ticket was issued, and a date filter
     would let an anonymous caller recover that by bisecting ranges.
     """
     serializer_class = PublicViolationSerializer
@@ -953,19 +991,20 @@ class PublicViolationListView(generics.ListAPIView):
 
     def get_queryset(self):
         # '-pk' is only a tie-breaker so pagination order is stable; it is never returned.
-        qs = Violation.objects.filter(
-            status='paid'
-        ).prefetch_related('items__violation_type').order_by('-date_issued', '-pk')
+        qs = (
+            ViolationItem.objects.filter(violation__status='paid')
+            .select_related('violation_type', 'violation')
+            .order_by('-violation__date_issued', '-pk')
+        )
 
         violation_type = self.request.query_params.get('violation_type')
-
         if violation_type:
-            type_filter = Q(items__violation_type__name=violation_type)
+            type_filter = Q(violation_type__name=violation_type)
             if violation_type.isdigit():
-                type_filter |= Q(items__violation_type_id=violation_type)
+                type_filter |= Q(violation_type_id=violation_type)
             qs = qs.filter(type_filter)
 
-        return qs.distinct()
+        return qs
 
 
 class PublicViolationTypeHighlightsView(APIView):

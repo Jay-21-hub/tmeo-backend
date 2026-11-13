@@ -189,6 +189,34 @@ class AnalyticsAggregationTests(APITestCase):
         self.assertEqual(d['repeat_offender_stats']['rate'], 0)
         self.assertEqual(d['hotspot_by_type']['rows'], [])
 
+    def test_payment_duration_counts_only_paid_rows_with_both_dates(self):
+        from violations.models import Assessment
+        issued = at(3, 1, 9)
+        paid = Violation.objects.create(
+            violator_name='Paid Driver', license_number='PAY-1', plate_number='PAY1',
+            ovr_number='PAY-1', vehicle_type='Cars', location='Perez Park',
+            date_issued=issued, status='paid', enforcer=self.enforcer,
+        )
+        ViolationItem.objects.create(
+            violation=paid, violation_type=self.no_helmet, penalty_amount_snapshot=500,
+        )
+        Assessment.objects.create(violation=paid, date_paid=datetime.date(2026, 3, 5), or_number='OR-PAY')
+        unpaid = Violation.objects.create(
+            violator_name='Unpaid Driver', license_number='PAY-2', plate_number='PAY2',
+            ovr_number='PAY-2', vehicle_type='Cars', location='Perez Park',
+            date_issued=issued, status='pending', enforcer=self.enforcer,
+        )
+        Assessment.objects.create(violation=unpaid, date_paid=datetime.date(2026, 3, 2))
+        d = self.get(period='month')
+        duration = d['payment_duration']
+        self.assertEqual(duration['paid_count'], 1)
+        self.assertEqual(duration['average_days'], 4.0)
+        buckets = {b['key']: b['count'] for b in duration['buckets']}
+        self.assertEqual(buckets['4_7'], 1)
+        self.assertEqual(buckets['0_3'], 0)
+        self.assertIn('total', d)
+        self.assertIn('day_hour_heatmap', d)
+
     def test_resolution_time_documented_not_computed(self):
         d = self.get()
         self.assertEqual(d['unsupported_analytics'][0]['key'], 'resolution_time')

@@ -35,7 +35,8 @@ import re
 from decimal import Decimal
 
 from django.db.models import (
-    Count, DecimalField, F, Func, Max, Q, Sum, TextField, Value,
+    Count, DecimalField, F, Func,
+    Max, Q, Sum, TextField, Value,
 )
 from django.db.models.fields.json import KeyTextTransform
 from django.db.models.functions import (
@@ -63,6 +64,16 @@ AGING_BUCKETS = [
     ('8_30',  '8–30 days',  8,  30),
     ('31_60', '31–60 days', 31, 60),
     ('61_plus', '61+ days', 61, None),
+]
+
+# Days from the Manila issue date through Assessment.date_paid.
+# Day 30 stays in 16–30; 30+ starts at 31 so the ranges do not overlap.
+PAYMENT_BUCKETS = [
+    ('0_3', '0–3 days', 0, 3),
+    ('4_7', '4–7 days', 4, 7),
+    ('8_15', '8–15 days', 8, 15),
+    ('16_30', '16–30 days', 16, 30),
+    ('30_plus', '30+ days', 31, None),
 ]
 
 
@@ -324,6 +335,107 @@ def _pct_change(curr, prev):
     if prev == 0:
         return 100.0 if curr > 0 else 0.0
     return round(((curr - prev) / prev) * 100, 1)
+
+
+def _as_days(value):
+    if value is None:
+        return None
+    if hasattr(value, 'days'):
+        return value.days
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_iso_date(value):
+    if not value:
+        return None
+    if isinstance(value, datetime.datetime):
+        return value.date()
+    if isinstance(value, datetime.date):
+        return value
+    try:
+        return datetime.date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def _manila_date(value):
+    if value is None:
+        return None
+    if isinstance(value, datetime.datetime):
+        return timezone.localtime(value).date()
+    if isinstance(value, datetime.date):
+        return value
+    return _parse_iso_date(value)
+
+
+def _payment_duration(scoped):
+    """Days from issue date to payment date for paid rows that have both.
+
+    Uses the same period-and-filter scope as the other historical charts.
+    Unpaid rows, and paid rows missing either timestamp, are left out.
+    """
+    from zoneinfo import ZoneInfo
+
+    counts = {key: 0 for key, *_rest in PAYMENT_BUCKETS}
+    total_days = 0
+    included = 0
+
+    def take(days):
+        nonlocal total_days, included
+        if days is None or days < 0:
+            return
+        for key, _label, lo, hi in PAYMENT_BUCKETS:
+            if days >= lo and (hi is None or days <= hi):
+                counts[key] += 1
+                total_days += days
+                included += 1
+                return
+
+    manila = ZoneInfo('Asia/Manila')
+    for kind, qs in scoped:
+        if kind == 'active':
+            rows = (
+                qs.filter(
+                    x_status='paid',
+                    date_issued__isnull=False,
+                    assessment__date_paid__isnull=False,
+                )
+                .annotate(issued_day=TruncDate('date_issued', tzinfo=manila))
+                .values_list('issued_day', 'assessment__date_paid')
+            )
+            for issued_day, paid in rows.iterator(chunk_size=2000):
+                issued_day = _manila_date(issued_day)
+                paid = _manila_date(paid)
+                if issued_day is None or paid is None:
+                    continue
+                take((paid - issued_day).days)
+        else:
+            rows = qs.filter(x_status='paid').values_list(
+                'date_issued', 'data__assessment__date_paid',
+            )
+            for issued, paid_raw in rows.iterator(chunk_size=2000):
+                paid = _parse_iso_date(paid_raw)
+                issued_day = _manila_date(issued)
+                if paid is None or issued_day is None:
+                    continue
+                take((paid - issued_day).days)
+
+    return {
+        'buckets': [
+            {'key': key, 'label': label, 'count': counts[key]}
+            for key, label, *_rest in PAYMENT_BUCKETS
+        ],
+        'average_days': round(total_days / included, 1) if included else None,
+        'paid_count': included,
+        'basis': (
+            'Paid violations in the selected period that have both an issue '
+            'timestamp and a payment date. Days run from the Asia/Manila issue '
+            'date through the payment date.'
+        ),
+    }
 
 
 def compute_analytics(params, spec=None):
@@ -816,6 +928,7 @@ def compute_analytics(params, spec=None):
         'vehicle_by_type': vehicle_by_type,
         'location_ranking': location_ranking,
         'penalty_aging': penalty_aging,
+        'payment_duration': _payment_duration(scoped),
         'repeat_offender_stats': repeat_stats,
         'unsupported_analytics': [{
             'key': 'resolution_time',

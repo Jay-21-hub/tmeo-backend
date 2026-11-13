@@ -3,7 +3,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
 import {
-  AXIS_TICK, GRID_STROKE, CHART_PALETTE, AGING_COLORS, WEEKDAY_SHORT, hourShort, hourRange, peso,
+  AXIS_TICK, GRID_STROKE, CHART_PALETTE, AGING_COLORS, PAYMENT_COLORS, WEEKDAY_SHORT, hourShort, hourRange, peso,
 } from './analyticsConfig'
 import { ChartTooltip, RichTooltip } from './AnalyticsPrimitives'
 import { rowFromChartEvent } from './analyticsUtils'
@@ -227,54 +227,45 @@ export function WeekdayChart({ data, activeWeekday, onSelect, height = 220 }) {
   )
 }
 
-/* ─── Day × hour heatmap (CSS grid, no chart lib) ───────────── */
-export function DayHourHeatmap({ heatmap, activeWeekday, activeHour, onSelect }) {
-  const cells = heatmap?.cells || []
-  const max = heatmap?.max || 0
+/* ─── Busiest day-and-hour slots (replaces the day × hour grid) ─ */
+export function BusiestSlotsChart({ heatmap, activeWeekday, activeHour, onSelect }) {
   const names = heatmap?.weekday_names || []
-  const byKey = new Map(cells.map(c => [`${c.weekday}-${c.hour}`, c.count]))
-
+  const slots = (heatmap?.cells || [])
+    .filter(c => c.count > 0)
+    .sort((a, b) => b.count - a.count || a.weekday - b.weekday || a.hour - b.hour)
+    .slice(0, 8)
+    .map(c => ({
+      name: `${names[c.weekday - 1] || WEEKDAY_SHORT[c.weekday - 1] || 'Day'} · ${hourRange(c.hour)}`,
+      count: c.count,
+      weekday: c.weekday,
+      hour: c.hour,
+    }))
+  if (!slots.length) return null
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <div style={{ minWidth: 640 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '44px repeat(24, 1fr)', gap: 2, marginBottom: 2 }}>
-          <span />
-          {Array.from({ length: 24 }, (_, h) => (
-            <span key={h} className="text-caption" style={{ fontSize: 9, textAlign: 'center' }}>{h % 3 === 0 ? hourShort(h) : ''}</span>
-          ))}
-        </div>
-        {names.map((name, wi) => {
-          const w = wi + 1
-          return (
-            <div key={w} style={{ display: 'grid', gridTemplateColumns: '44px repeat(24, 1fr)', gap: 2, marginBottom: 2 }}>
-              <span className="text-caption" style={{ fontSize: 11, alignSelf: 'center' }}>{WEEKDAY_SHORT[wi]}</span>
-              {Array.from({ length: 24 }, (_, h) => {
-                const n = byKey.get(`${w}-${h}`) || 0
-                const selected = activeWeekday === w && activeHour === h
-                const alpha = max > 0 && n > 0 ? 0.15 + 0.85 * (n / max) : 0
-                return (
-                  <button
-                    key={h} type="button"
-                    onClick={() => onSelect?.(w, h)}
-                    title={`${name} ${hourRange(h)}: ${n} violation${n !== 1 ? 's' : ''}`}
-                    aria-label={`${name} ${hourRange(h)}: ${n} violations`}
-                    style={{
-                      height: 24, border: selected ? '2px solid var(--navy-900)' : '1px solid var(--slate-100)', borderRadius: 3, padding: 0, cursor: 'pointer',
-                      background: n > 0 ? `rgba(37, 99, 235, ${alpha.toFixed(2)})` : 'var(--slate-50)',
-                    }}
-                  />
-                )
-              })}
-            </div>
-          )
-        })}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
-          <span className="text-caption" style={{ fontSize: 10 }}>Fewer</span>
-          {[0.15, 0.4, 0.65, 0.9].map(a => <span key={a} style={{ width: 16, height: 10, borderRadius: 2, background: `rgba(37, 99, 235, ${a})` }} />)}
-          <span className="text-caption" style={{ fontSize: 10 }}>More{max ? ` (max ${max})` : ''}</span>
-        </div>
-      </div>
-    </div>
+    <RankedBarChart
+      data={slots}
+      nameWidth={196}
+      isActive={(r) => r.weekday === activeWeekday && r.hour === activeHour}
+      onSelect={(r) => r && onSelect?.(r.weekday, r.hour)}
+      extra={() => ['Click to filter the page to this day and hour']}
+    />
+  )
+}
+
+/* ─── How long paid violations took to be paid ─────────────── */
+export function PaymentDurationChart({ buckets, height = 220 }) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={buckets} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID_STROKE} />
+        <XAxis dataKey="label" tick={AXIS_TICK} tickLine={false} axisLine={false} />
+        <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} allowDecimals={false} />
+        <Tooltip content={<RichTooltip title={(r) => `Paid in ${r?.label}`} extra={() => ['Paid violations only']} />} cursor={{ fill: 'rgba(37,99,235,0.06)' }} />
+        <Bar dataKey="count" name="Paid violations" radius={[4, 4, 0, 0]} maxBarSize={56} label={{ position: 'top', fontSize: 11, fill: '#6B7280' }}>
+          {buckets.map((b, i) => <Cell key={b.key} fill={PAYMENT_COLORS[i % PAYMENT_COLORS.length]} />)}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
   )
 }
 

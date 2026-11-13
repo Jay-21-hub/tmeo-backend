@@ -33,7 +33,7 @@ export default function ViolationUpdatesPage() {
         setKnownTypes((prev) => {
           const names = new Set(prev)
           for (const r of data.results || []) {
-            for (const t of r.violation_types || []) names.add(t.name)
+            if (r.name) names.add(r.name)
           }
           return Array.from(names).sort()
         })

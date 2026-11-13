@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate, Link } from 'react-router-dom'
 import api from '../../services/api'
 import { API, ROLES } from '../../constants'
+import { isInstalledPwa } from '../../utils/pwaDisplay'
 import tmeoSeal from '../../assets/tmeo-seal.png'
 import tmeoBg from '../../assets/tmeo-office.jpg'
 import { Eye, EyeOff, User, Lock, ArrowRight, ArrowLeft, Loader2, AlertCircle, X, Send, CheckCircle2 } from 'lucide-react'
@@ -293,12 +294,15 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <hr className="lg-rule lg-in" style={{ '--i': 5 }} />
-
-          <Link to="/" className="lg-back lg-in" style={{ '--i': 6 }}>
-            <ArrowLeft size={18} strokeWidth={1.8} aria-hidden="true" />
-            <span>Back to Public Website</span>
-          </Link>
+          {!isInstalledPwa() && (
+            <>
+              <hr className="lg-rule lg-in" style={{ '--i': 5 }} />
+              <Link to="/" className="lg-back lg-in" style={{ '--i': 6 }}>
+                <ArrowLeft size={18} strokeWidth={1.8} aria-hidden="true" />
+                <span>Back to Public Website</span>
+              </Link>
+            </>
+          )}
         </section>
       </main>
 

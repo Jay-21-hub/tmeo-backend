@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { clearAuthSession } from '../utils/session'
+import { isInstalledPwa } from '../utils/pwaDisplay'
 
 // Installed app only: log out when the phone was away from the app too long.
 // clearAuthSession() leaves the offline queue alone, so queued reports stay on
@@ -7,9 +8,7 @@ import { clearAuthSession } from '../utils/session'
 const AWAY_LIMIT_MS = 30 * 60 * 1000 // change this number to adjust
 const KEY = 'last_active_at'
 
-const isStandalone = () =>
-  window.matchMedia('(display-mode: standalone)').matches ||
-  window.navigator.standalone === true
+const isStandalone = () => isInstalledPwa()
 
 export function useInactivityLogout() {
   useEffect(() => {

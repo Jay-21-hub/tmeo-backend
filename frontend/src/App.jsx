@@ -11,13 +11,11 @@ import MissionVisionPage from './pages/public/MissionVisionPage'
 import ViolationUpdatesPage from './pages/public/ViolationUpdatesPage'
 import ContactPage from './pages/public/ContactPage'
 import { clearAuthSession } from './utils/session'
+import { isInstalledPwa } from './utils/pwaDisplay'
 import { useInactivityLogout } from './hooks/useInactivityLogout'
 
 function isStandalone() {
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    window.navigator.standalone === true // iOS Safari
-  )
+  return isInstalledPwa()
 }
 
 // Installed app skips the landing page: login if signed out, dashboard if signed in.

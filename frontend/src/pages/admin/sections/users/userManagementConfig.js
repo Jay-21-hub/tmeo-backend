@@ -32,14 +32,17 @@ export const SEPARATED_EMPLOYMENT_STATUSES = [
 /** The role this account would change TO, or null when no change is supported. */
 export const getRoleChangeTarget = (role) => ROLE_CHANGE_TRANSITIONS[role] || null
 
-/**
- * Whether "Change Role" is offered for a row: a supported transition, an
- * active non-separated account, and not the signed-in admin's own account.
- */
+/** Inactive login, or employment that is not Active. Details stay locked except reactivation. */
+export const accountIsLocked = (user) => {
+  if (!user) return false
+  if (user.is_active === false) return true
+  return Boolean(user.employment_status) && user.employment_status !== 'active'
+}
+
+/** Change Role is offered only for an active account that is not the signed-in admin. */
 export const canChangeRole = (user, currentUserId = null) => {
   if (!user || !getRoleChangeTarget(user.role)) return false
-  if (user.is_active === false) return false
-  if (SEPARATED_EMPLOYMENT_STATUSES.includes(user.employment_status)) return false
+  if (accountIsLocked(user)) return false
   if (currentUserId !== null && currentUserId !== undefined && String(user.id) === String(currentUserId)) return false
   return true
 }

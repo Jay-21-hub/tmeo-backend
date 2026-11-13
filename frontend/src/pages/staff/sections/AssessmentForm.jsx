@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import PageHeader from '../../../components/ui/PageHeader'
 import api from '../../../services/api'
 import { API } from '../../../constants'
@@ -13,6 +13,7 @@ import PrintConfirmModal from '../../../components/print/PrintConfirmModal'
 import usePrintConfirmation from '../../../components/print/usePrintConfirmation'
 import './assessment/assessmentFlow.css'
 import { buildReceiptTicket } from './assessment/receiptTicket'
+import { hasPersonalDetails, hasVehicleDetails } from '../../../utils/savedViolator'
 import { filterTypesByVehicle, pruneSelectedIds } from '../../../utils/violationTypeFilter'
 
 export default function AssessmentForm({ violationData = null, onSuccess }) {
@@ -48,8 +49,10 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
   const [vtSearch, setVtSearch] = useState('')
   const [loadingTypes, setLoadingTypes] = useState(true)
   const [lookupLoading, setLookupLoading] = useState(false)
-  const [lookupDone, setLookupDone] = useState(false)
   const [repeatInfo, setRepeatInfo] = useState(null)
+  const [personalSaved, setPersonalSaved] = useState(null)
+  const [vehicleSaved, setVehicleSaved] = useState(null)
+  const lookupTimerRef = useRef(null)
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
   const [_submittedId, setSubmittedId] = useState(null)
@@ -176,46 +179,61 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
 
   const toggleId = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
 
-  const handleLookup = async (licenseOrPlate) => {
-    if (!licenseOrPlate.trim()) return
-    setLookupLoading(true); setLookupDone(false); setRepeatInfo(null)
+  const runLookup = async (kind, value) => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+    setLookupLoading(true)
     try {
-      // Match on whichever field the staff member actually blurred/entered —
-      // license_number takes priority since it's the more reliable identifier.
-      const isLicense = licenseOrPlate === form.license_number
-      const param = isLicense
-        ? `license_number=${encodeURIComponent(licenseOrPlate)}`
-        : `plate_number=${encodeURIComponent(licenseOrPlate)}`
+      const param = kind === 'license'
+        ? `license_number=${encodeURIComponent(value)}`
+        : `plate_number=${encodeURIComponent(value)}`
       const res = await api.get(`/api/violations/violator-lookup/?${param}`)
       const data = res.data
-      if (data?.found && data.match) {
-        const match = data.match
-        // AUTOFILL SAFETY: a value the Staff member has already typed/picked
-        // wins — the match only fills in whatever is still blank. This was
-        // previously backwards (match always won over an existing value);
-        // fixed here to match the same "fill blanks only" rule the Enforcer
-        // Issue OVR lookup already follows.
-        setForm(prev => ({
-          ...prev,
-          full_name: prev.full_name || match.violator_name || '',
-          address: prev.address || match.address || '',
-          license_number: prev.license_number || match.license_number || '',
-          // Confiscation is per incident — never carried over from a prior
-          // violation's record.
-          license_status: prev.license_status,
-          plate_number: prev.plate_number || match.plate_number || '',
-          registration_number: prev.registration_number || match.registration_number || '',
-          vehicle_type: prev.vehicle_type || match.vehicle_type || '',
-          vehicle_brand: prev.vehicle_brand || match.vehicle_brand || '',
-          vehicle_model: prev.vehicle_model || match.vehicle_model || '',
-        }))
-        setLookupDone(true)
+      if (kind === 'license') {
+        setPersonalSaved(hasPersonalDetails(data?.personal) ? data.personal : null)
+        setRepeatInfo(data?.violation_count > 0 ? data : null)
+      } else {
+        setVehicleSaved(hasVehicleDetails(data?.vehicle) ? data.vehicle : null)
       }
-      // violation_count reflects violations already on file — never mutated
-      // or merged into the ticket being filed now, just shown as context.
-      if (data?.violation_count > 0) setRepeatInfo(data)
-    } catch { /* ignore lookup errors */ }
+    } catch { /* offline or unavailable — leave the form as typed */ }
     finally { setLookupLoading(false) }
+  }
+
+  const handleLookup = (kind, value) => {
+    clearTimeout(lookupTimerRef.current)
+    const trimmed = (value || '').trim()
+    if (!trimmed) {
+      if (kind === 'license') { setPersonalSaved(null); setRepeatInfo(null) }
+      else setVehicleSaved(null)
+      return
+    }
+    lookupTimerRef.current = setTimeout(() => runLookup(kind, trimmed), 400)
+  }
+
+  const applyPersonal = () => {
+    if (!personalSaved) return
+    const saved = personalSaved
+    setForm(prev => ({
+      ...prev,
+      ...(saved.violator_name ? { full_name: saved.violator_name } : {}),
+      ...(saved.address ? { address: saved.address } : {}),
+      ...(saved.license_number ? { license_number: saved.license_number } : {}),
+    }))
+    setPersonalSaved(null)
+  }
+
+  const applyVehicle = () => {
+    if (!vehicleSaved) return
+    const saved = vehicleSaved
+    setForm(prev => ({
+      ...prev,
+      ...(saved.plate_number ? { plate_number: saved.plate_number } : {}),
+      ...(saved.registration_number ? { registration_number: saved.registration_number } : {}),
+      ...(saved.vehicle_type ? { vehicle_type: saved.vehicle_type } : {}),
+      ...(saved.vehicle_brand ? { vehicle_brand: saved.vehicle_brand } : {}),
+      ...(saved.vehicle_model ? { vehicle_model: saved.vehicle_model } : {}),
+      ...(saved.vehicle_use ? { vehicle_use: saved.vehicle_use } : {}),
+    }))
+    setVehicleSaved(null)
   }
 
   // View/reprint an EXISTING prior ticket surfaced by the repeat-violator
@@ -557,8 +575,10 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
 
       {step === 1 && (
         <AssessmentStep1
-          form={form} errors={errors} lookupLoading={lookupLoading} lookupDone={lookupDone} repeatInfo={repeatInfo} violationData={violationData}
-          onChange={handleChange} onLookup={handleLookup} onLookupReset={() => { setLookupDone(false); setRepeatInfo(null) }} onNext={handleNextStep}
+          form={form} errors={errors} lookupLoading={lookupLoading} repeatInfo={repeatInfo} violationData={violationData}
+          personalSaved={!!personalSaved} vehicleSaved={!!vehicleSaved}
+          onUsePersonal={applyPersonal} onUseVehicle={applyVehicle}
+          onChange={handleChange} onLookup={handleLookup} onNext={handleNextStep}
           onViewTicket={handleViewExistingTicket} viewingTicketId={viewingTicketId}
         />
       )}

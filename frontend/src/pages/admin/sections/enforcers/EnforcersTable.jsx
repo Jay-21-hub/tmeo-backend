@@ -1,6 +1,6 @@
 import { Eye, UserX, ChevronLeft, ChevronRight, Users2 } from 'lucide-react'
 import { EmptyState } from '../../../../components/ui/States'
-import { EnforcerStatusBadge } from './enforcerStatus'
+import { EnforcerStatusBadge, dutyStatusLabel } from './enforcerStatus'
 
 const COLS = ['Enforcer ID', 'Full Name', 'Badge No.', 'Contact', 'Status', 'Actions']
 
@@ -37,7 +37,7 @@ export default function EnforcersTable({
                 <td style={{ fontWeight: 600, color: 'var(--slate-950)' }}>{enf.full_name || `${enf.last_name}, ${enf.first_name}`}</td>
                 <td className="text-caption">{enf.badge_number || '—'}</td>
                 <td className="text-caption">{enf.contact || '—'}</td>
-                <td><EnforcerStatusBadge status={enf.status} /></td>
+                <td><EnforcerStatusBadge status={dutyStatusLabel(enf)} /></td>
                 <td>
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                     <button className="row-action-btn" style={{ background: 'var(--blue-50)', opacity: 1 }} title="View" onClick={() => onView(enf)}><Eye size={13} color="var(--blue-600)" /></button>

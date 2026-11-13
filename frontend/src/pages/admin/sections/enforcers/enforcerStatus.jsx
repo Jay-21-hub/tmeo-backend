@@ -3,6 +3,13 @@ import Badge from '../../../../components/ui/Badge'
 
 export const ALL_STATUSES = ['Active', 'On Duty', 'Off Duty', 'On Leave', 'Suspended', 'Resigned', 'Retired']
 
+/** Duty labels produced by the schedule (Asia/Manila). Employment status is separate. */
+export const DUTY_STATUS_OPTIONS = ['On Duty', 'On Break', 'Off Duty']
+
+export function dutyStatusLabel(enforcer) {
+  return enforcer?.duty_status_display || 'Off Duty'
+}
+
 const STATUS_TONE = {
   'Active':    'success',
   'On Duty':   'info',

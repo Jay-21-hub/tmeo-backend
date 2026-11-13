@@ -1,5 +1,5 @@
 import { Phone, ChevronLeft, ChevronRight } from 'lucide-react'
-import { EnforcerStatusBadge } from './enforcerStatus'
+import { EnforcerStatusBadge, dutyStatusLabel } from './enforcerStatus'
 
 const CardSkeleton = () => (
   <div className="card card-padded" style={{ marginBottom: 12 }}>
@@ -15,7 +15,7 @@ const Card = ({ enf, onView, onDeact }) => (
         <p style={{ fontWeight: 700, fontSize: 14, color: 'var(--slate-950)', margin: 0 }}>{enf.full_name || `${enf.last_name}, ${enf.first_name}`}</p>
         <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--blue-700)', background: 'var(--blue-50)', padding: '2px 7px', borderRadius: 'var(--radius-sm)', marginTop: 4, display: 'inline-block' }}>{enf.enforcer_id}</span>
       </div>
-      <EnforcerStatusBadge status={enf.status} />
+      <EnforcerStatusBadge status={dutyStatusLabel(enf)} />
     </div>
     <p className="text-caption" style={{ margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 4 }}>
       <Phone size={11} /> {enf.contact || '—'} &nbsp;•&nbsp; Badge: {enf.badge_number || '—'}

@@ -292,6 +292,8 @@ class ViolatorLookupScoping(BaseRoleTestCase):
         self.assertTrue(body['found'])
         self.assertGreaterEqual(body['violation_count'], 1)
         self.assertEqual(body['history'], [])
+        self.assertEqual(body['personal']['license_number'], 'D07-25-000928')
+        self.assertIsNone(body['vehicle'])
 
     def test_staff_gets_full_history(self):
         res = self.as_user(self.staff).get(
@@ -323,6 +325,8 @@ class ViolatorLookupScoping(BaseRoleTestCase):
         self.assertEqual(body['match']['vehicle_brand'], 'Toyota')
         self.assertEqual(body['match']['vehicle_model'], 'Vios')
         self.assertEqual(body['match']['vehicle_type'], 'Car')
+        self.assertEqual(body['vehicle']['vehicle_brand'], 'Toyota')
+        self.assertIsNone(body['personal'])
         # An enforcer's plate lookup still gets no per-ticket history rows —
         # same scoping rule as the license_number lookup above.
         self.assertEqual(body['history'], [])
@@ -345,10 +349,29 @@ class PublicEndpointExposure(BaseRoleTestCase):
         res = self.client.get('/api/violations/public/')
         self.assertEqual(res.status_code, 200)
         row = res.json()['results'][0]
-        # Only the violation type(s) + fine. No pk (enumeration) and no timestamps.
-        self.assertEqual(set(row), {'violation_types'})
-        for vt in row['violation_types']:
-            self.assertEqual(set(vt), {'name', 'category', 'description', 'fine'})
+        # One violation type + its fine. No pk and no timestamps.
+        self.assertEqual(set(row), {'name', 'category', 'description', 'fine'})
+
+    def test_public_feed_lists_each_violation_on_a_ticket(self):
+        Violation.objects.filter(pk=self.other_ovr.pk).update(status='paid')
+        extra = ViolationType.objects.create(
+            code='NL-PUB', name='No License', penalty_amount=1500, description='Driving without a license',
+        )
+        ViolationItem.objects.create(
+            violation=self.other_ovr, violation_type=extra, penalty_amount_snapshot=1500,
+        )
+        self.client.force_authenticate(None)
+        res = self.client.get('/api/violations/public/')
+        self.assertEqual(res.status_code, 200)
+        names = [row['name'] for row in res.json()['results']]
+        self.assertIn('No License', names)
+        self.assertEqual(len(names), res.json()['count'])
+        filtered = self.client.get('/api/violations/public/', {'violation_type': 'No License'})
+        self.assertEqual(filtered.status_code, 200)
+        body = filtered.json()
+        self.assertEqual(body['count'], 1)
+        self.assertEqual(body['results'][0]['name'], 'No License')
+        self.assertEqual(body['results'][0]['fine'], 1500.0)
 
     def test_public_feed_ignores_date_filters(self):
         # The feed no longer shows dates, so it must not let callers recover them

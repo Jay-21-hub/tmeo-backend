@@ -7,7 +7,7 @@ import Alert from '../../../../components/ui/Alert'
 import { Field, TextInput, Select } from '../../../../components/ui/Field'
 import {
   EMPTY_FORM, ROLE_LABELS, CIVIL_STATUS_OPTIONS,
-  EMPLOYMENT_STATUS_OPTIONS,
+  EMPLOYMENT_STATUS_OPTIONS, accountIsLocked,
 } from './userManagementConfig'
 import { buildDisplayName, displayUserName } from './userDisplayName'
 import { toTitleCase, isValidPHPhone } from '../../../../utils/helpers'
@@ -163,6 +163,20 @@ export default function AddUserModal({ onClose, onSuccess, mode = 'create', user
     onClose()
   }
 
+  const handleReactivate = async () => {
+    setLoading(true)
+    try {
+      await api.patch(`/api/auth/users/${user.id}/`, { employment_status: 'active' })
+      onSuccess('Account reactivated.')
+      onClose()
+    } catch (err) {
+      const detail = err.response?.data?.detail
+      setErrors({ submit: detail || 'Could not reactivate this account.' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleSubmit = async () => {
     if (!validateStep3()) return
     setLoading(true)
@@ -229,6 +243,42 @@ export default function AddUserModal({ onClose, onSuccess, mode = 'create', user
 
         <div style={{ marginTop: 14 }}>
           <Alert tone="warning">Make sure to note the <strong>ID Number</strong> — this is what the user will type in the login screen. It cannot be changed.</Alert>
+        </div>
+      </Modal>
+    )
+  }
+
+  const locked = isEdit && accountIsLocked(user)
+  if (locked) {
+    const employment = EMPLOYMENT_STATUS_OPTIONS.find(o => o.value === user.employment_status)?.label || user.employment_status || '—'
+    return (
+      <Modal
+        open onClose={onClose} width={520} title="Edit User"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={onClose}>Close</Button>
+            <Button onClick={handleReactivate} loading={loading}>Reactivate account</Button>
+          </>
+        )}
+      >
+        {errors.submit && <div style={{ marginBottom: 14 }}><Alert tone="danger">{errors.submit}</Alert></div>}
+        <Alert tone="info">
+          This account is inactive, so its details are locked. An administrator can reactivate it. Name, email, role, badge, and the other fields cannot be changed until then.
+        </Alert>
+        <div style={{ marginTop: 14, background: 'var(--slate-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
+          {[
+            { label: 'Full Name', value: displayUserName(user) },
+            { label: 'Email', value: user.email || '—' },
+            { label: 'Role', value: ROLE_LABELS[user.role] || user.role || '—' },
+            { label: 'Badge Number', value: user.badge_number || '—' },
+            { label: 'Employment', value: employment },
+            { label: 'Login', value: user.is_active === false ? 'Inactive' : 'Signed-in access still open' },
+          ].map(({ label, value }, i, arr) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '10px 14px', borderBottom: i < arr.length - 1 ? '1px solid var(--slate-100)' : 'none' }}>
+              <span className="text-caption" style={{ fontWeight: 500 }}>{label}</span>
+              <span style={{ fontSize: 13, color: 'var(--slate-950)', fontWeight: 600, textAlign: 'right' }}>{value}</span>
+            </div>
+          ))}
         </div>
       </Modal>
     )

@@ -57,6 +57,7 @@ export const GRID_STROKE = '#F3F4F6'
 /* Sequential blues for neutral "age" buckets — deliberately not red/amber,
    because no official TMEO payment deadline exists to justify urgency colors. */
 export const AGING_COLORS = ['#BFDBFE', '#93C5FD', '#3B82F6', '#1D4ED8']
+export const PAYMENT_COLORS = ['#0E7490', '#0891B2', '#2563EB', '#1D4ED8', '#1E3A8A']
 
 export const peso = (n) => `\u20B1${Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
 

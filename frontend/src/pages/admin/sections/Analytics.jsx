@@ -4,7 +4,7 @@ import api from '../../../services/api'
 import {
   BarChart2, TrendingUp, MapPin, Clock, RefreshCw, Activity, Shield, Users, Home, X,
   Calendar, Tag, Award, Layers, ChevronDown, Filter, FileText, Truck, Download, DollarSign,
-  Hourglass, Grid3x3, Info,
+  Hourglass, Info,
 } from 'lucide-react'
 import {
   BarChart, Bar, PieChart as RePieChart, Pie, Cell,
@@ -28,7 +28,7 @@ import {
 import { rowFromChartEvent, useElementWidth } from './analytics/analyticsUtils'
 import {
   TrendChart, DonutChart, RankedBarChart, CrosstabMatrix, PeakHoursChart, WeekdayChart,
-  DayHourHeatmap, AgingChart, RepeatDistributionChart,
+  BusiestSlotsChart, AgingChart, PaymentDurationChart, RepeatDistributionChart,
 } from './analytics/AnalyticsCharts'
 import { DetailModal, ListModal, YearFilterModal } from './analytics/AnalyticsModals'
 import AnalyticsMap from './analytics/AnalyticsMap'
@@ -829,10 +829,11 @@ export default function Analytics({ scrollTo }) {
         </div>
         <div id="an-heatmap" style={{ marginBottom: 16 }}>
           <Card>
-            <CardHeader title="Day × Hour Heatmap" subtitle="When violations happen — click a cell to filter by that day and hour" />
+            <CardHeader title="Busiest Day and Hour" subtitle="Which specific day-and-hour slots are busiest — click a bar to filter that day and hour" />
             {hasTimeData ? (
-              <DayHourHeatmap heatmap={heatmap} activeWeekday={filters.weekday} activeHour={filters.hour} onSelect={toggleTimeCell} />
-            ) : <EmptyChart icon={Grid3x3} message="No time data for this selection" />}
+              <BusiestSlotsChart heatmap={heatmap} activeWeekday={filters.weekday} activeHour={filters.hour} onSelect={toggleTimeCell} />
+            ) : <EmptyChart icon={Clock} message="No time data for this selection" />}
+            <ChartNote>Peak Hours shows the hour of day across the whole week. Violations by Day of Week shows the day across all hours. This chart shows the combination: the slots where both line up.</ChartNote>
           </Card>
         </div>
 
@@ -1095,9 +1096,9 @@ export default function Analytics({ scrollTo }) {
           </div>
         )}
 
-        <div id="an-aging" style={{ marginBottom: 16 }}>
+        <div id="an-aging" style={{ display: 'grid', gridTemplateColumns: cols(PAIR), gap: 16, marginBottom: 16 }}>
           <Card>
-            <CardHeader title="Outstanding Tickets by Age" subtitle="Unpaid violations by days since issued — as of today" />
+            <CardHeader title="Outstanding Tickets by Age" subtitle="How long unpaid violations have been waiting — as of today" />
             {aging && aging.total_count > 0 ? (
               <>
                 <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -1107,7 +1108,20 @@ export default function Analytics({ scrollTo }) {
                 <AgingChart buckets={aging.buckets} />
               </>
             ) : <EmptyChart icon={Hourglass} message="No unpaid violations are outstanding" />}
-            {aging && <ChartNote>Counts active pending/processing tickets as of {aging.as_of} and ignores the period and time-of-day filters. Age ranges are neutral — no official payment deadline is assumed.</ChartNote>}
+            {aging && <ChartNote>Counts active pending and processing tickets as of {aging.as_of}. It ignores the period filter. These are tickets that are not paid yet.</ChartNote>}
+          </Card>
+          <Card>
+            <CardHeader title="Payment Duration" subtitle="How many days paid violations took from the issue date to the payment date" />
+            {data?.payment_duration?.paid_count > 0 ? (
+              <>
+                <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 8 }}>
+                  <div><div className="text-display" style={{ fontSize: 28 }}>{data.payment_duration.average_days}</div><div className="text-caption">average days to payment</div></div>
+                  <div><div className="text-display" style={{ fontSize: 28 }}>{data.payment_duration.paid_count.toLocaleString()}</div><div className="text-caption">paid with both dates</div></div>
+                </div>
+                <PaymentDurationChart buckets={data.payment_duration.buckets} />
+              </>
+            ) : <EmptyChart icon={DollarSign} message="No paid violations with both an issue date and a payment date in this selection" />}
+            <ChartNote>Only violations that are paid and have both an issue timestamp and a payment date. The period filter applies. Unpaid tickets are in Outstanding Tickets by Age.</ChartNote>
           </Card>
         </div>
 
