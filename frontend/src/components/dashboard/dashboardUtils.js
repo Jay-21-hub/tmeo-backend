@@ -5,8 +5,18 @@ export const greetingFor = () => {
   return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
 }
 
-export const firstNameOf = (user, fallback = 'there') =>
-  (user?.full_name || '').trim().split(/\s+/)[0] || fallback
+/** Given name for the greeting. Uses first_name when the account has it
+ *  ("Jay Nard"); older accounts fall back to the stored full_name, which is
+ *  "Last, First Middle", so the part after the comma is read, never the
+ *  surname. Display only. */
+export const firstNameOf = (user, fallback = 'there') => {
+  const first = (user?.first_name || '').trim()
+  if (first) return first
+  const full = (user?.full_name || '').trim()
+  if (!full) return fallback
+  const given = full.includes(',') ? full.slice(full.indexOf(',') + 1).trim() : full
+  return given.split(/\s+/)[0] || fallback
+}
 
 const manila = (date, opts) => date.toLocaleString('en-PH', { timeZone: APP_TIMEZONE, ...opts })
 

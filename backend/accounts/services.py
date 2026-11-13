@@ -192,9 +192,18 @@ def change_user_role(*, target_pk, new_role, actor, reason, expected_role=None, 
 
         target.role = new_role
         target.id_number = new_id
+        # Badge number: an account that becomes an Enforcer and has none yet gets
+        # the next system-generated one (same transaction, advisory-locked). An
+        # existing badge is kept as is, and the badge of someone leaving the
+        # Enforcer role is left on the account, so a number is never reissued.
+        badge_assigned = None
+        if new_role == Role.ENFORCER.value and not (target.badge_number or '').strip():
+            badge_assigned = CustomUser.objects.generate_badge_number()
+            target.badge_number = badge_assigned
         _clear_role_specific_state(target, old_role)
         target.save(update_fields=[
-            'role', 'id_number', 'duty_status', 'break_started_at', 'duty_status_updated_at',
+            'role', 'id_number', 'badge_number',
+            'duty_status', 'break_started_at', 'duty_status_updated_at',
         ])
 
         invalidated = _blacklist_outstanding_tokens(target)
@@ -209,6 +218,7 @@ def change_user_role(*, target_pk, new_role, actor, reason, expected_role=None, 
                 'old_role': old_role, 'new_role': new_role,
                 'old_id_number': old_id, 'new_id_number': new_id,
                 'reason': reason,
+                'badge_number_assigned': badge_assigned,
                 'sessions_invalidated': True,
             },
             changes={

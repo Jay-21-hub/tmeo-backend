@@ -29,7 +29,6 @@ class AdminCreateUserSerializer(serializers.ModelSerializer):
             'date_of_birth',
             'civil_status',
             'role',
-            'badge_number',
             'assigned_area',
             'hired_year',
             'employment_status',
@@ -82,8 +81,13 @@ class AdminCreateUserSerializer(serializers.ModelSerializer):
             try:
                 with transaction.atomic():
                     id_number = CustomUser.objects.generate_id_number(role, hired_year)
+                    badge_number = (
+                        CustomUser.objects.generate_badge_number()
+                        if role == CustomUser.Role.ENFORCER else None
+                    )
                     user = CustomUser(
                         id_number  = id_number,
+                        badge_number = badge_number,
                         hired_year = hired_year,
                         is_active  = True,
                         full_name  = full_name,
@@ -300,7 +304,6 @@ class UpdateUserSerializer(serializers.ModelSerializer):
             'address',
             'date_of_birth',
             'civil_status',
-            'badge_number',
             'assigned_area',
             'employment_status',
             'profile_photo',
@@ -352,7 +355,15 @@ class UpdateUserSerializer(serializers.ModelSerializer):
         name_parts_touched = any(
             f in validated_data for f in ('last_name', 'first_name', 'middle_name')
         )
-        instance = super().update(instance, validated_data)
+        needs_badge = (
+            instance.role == CustomUser.Role.ENFORCER
+            and not (instance.badge_number or '').strip()
+        )
+        with transaction.atomic():
+            instance = super().update(instance, validated_data)
+            if needs_badge:
+                instance.badge_number = CustomUser.objects.generate_badge_number()
+                instance.save(update_fields=['badge_number'])
 
         if name_parts_touched:
             resulting_last  = instance.last_name

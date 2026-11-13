@@ -51,9 +51,9 @@ function StepIndicator({ current, steps }) {
 /* A field the backend won't accept an edit for (role, hired_year —
    not part of UpdateUserSerializer). Shown read-only so the admin still sees
    the value without being able to change it here. */
-function ReadOnlyField({ label, value }) {
+function ReadOnlyField({ label, value, helper = 'Not editable here' }) {
   return (
-    <Field label={label} helper="Not editable here">
+    <Field label={label} helper={helper}>
       {id => <TextInput id={id} value={value ?? ''} disabled readOnly />}
     </Field>
   )
@@ -104,7 +104,6 @@ export default function AddUserModal({ onClose, onSuccess, mode = 'create', user
 
   const validateStep2 = () => {
     const e = {}
-    if (form.role === 'enforcer' && !form.badge_number.trim()) e.badge_number = 'Badge number is required'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -113,7 +112,7 @@ export default function AddUserModal({ onClose, onSuccess, mode = 'create', user
     if (isEdit) return true
     const e = {}
     if (!form.password.trim()) e.password = 'Password is required'
-    if (form.password.length > 0 && form.password.length < 6) e.password = 'At least 6 characters'
+    if (form.password.length > 0 && form.password.length < 8) e.password = 'At least 8 characters'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -132,8 +131,8 @@ export default function AddUserModal({ onClose, onSuccess, mode = 'create', user
 
   const handleCreate = async () => {
     const payload = { ...form }
+    delete payload.badge_number // assigned by the server
     if (form.role !== 'enforcer') {
-      delete payload.badge_number
       delete payload.assigned_area
     }
     const res = await api.post('/api/auth/users/', payload)
@@ -157,7 +156,6 @@ export default function AddUserModal({ onClose, onSuccess, mode = 'create', user
     const newEmail = form.email.trim()
     if (newEmail !== (user.email || '')) payload.email = newEmail
     if (form.role === 'enforcer') {
-      payload.badge_number = form.badge_number
       payload.assigned_area = form.assigned_area
     }
     await api.patch(`/api/auth/users/${user.id}/`, payload)
@@ -344,9 +342,11 @@ export default function AddUserModal({ onClose, onSuccess, mode = 'create', user
           )}
           {form.role === 'enforcer' && (
             <>
-              <Field label="Badge Number" required error={errors.badge_number}>
-                {id => <TextInput id={id} value={form.badge_number} onChange={e => set('badge_number', e.target.value)} placeholder="Badge Number" error={!!errors.badge_number} />}
-              </Field>
+              <ReadOnlyField
+                label="Badge Number"
+                value={isEdit ? (form.badge_number || 'Assigned when you save') : 'Auto-generated after the account is created'}
+                helper="Assigned by the system"
+              />
               <Field label="Assigned Area" helper="Field deployment area — enforcers only">
                 {id => <TextInput id={id} value={form.assigned_area} onChange={e => set('assigned_area', e.target.value)} placeholder="e.g. Barangay 1–5, City Center" />}
               </Field>
@@ -359,7 +359,7 @@ export default function AddUserModal({ onClose, onSuccess, mode = 'create', user
         <div style={{ display: 'grid', gap: 16 }}>
           {!isEdit && (
             <Field label="Password" required error={errors.password}>
-              {id => <TextInput id={id} type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="Min. 6 characters" error={!!errors.password} />}
+              {id => <TextInput id={id} type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="Min. 8 characters" error={!!errors.password} />}
             </Field>
           )}
 
@@ -375,7 +375,7 @@ export default function AddUserModal({ onClose, onSuccess, mode = 'create', user
                 { label: 'Civil Status', value: CIVIL_STATUS_OPTIONS.find(o => o.value === form.civil_status)?.label || '—' },
                 { label: 'Role', value: ROLE_LABELS[form.role] || form.role },
                 ...(form.role === 'enforcer' ? [
-                  { label: 'Badge Number', value: form.badge_number || '—' },
+                  { label: 'Badge Number', value: isEdit ? (form.badge_number || 'Assigned on save') : 'Auto-generated' },
                   { label: 'Assigned Area', value: form.assigned_area || '—' },
                 ] : []),
                 { label: 'Hired Year', value: form.hired_year },

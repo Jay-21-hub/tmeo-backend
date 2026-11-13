@@ -11,6 +11,7 @@ import {
   ROLE_LABEL, EMPLOYMENT_TONE, formatLabel,
   formatProfileDate, formatLastLogin, formatYearHired,
 } from './profileFormat'
+import { displayUserName } from '../../pages/admin/sections/users/userDisplayName'
 import './ProfileModal.css'
 
 /**
@@ -60,7 +61,7 @@ export default function ProfileModal({ user, open, onClose, onUserUpdate, onLogo
           <div className="pf-identity">
             <AvatarUploader user={user} endpoint={API.ME} onUpdated={onUserUpdate} size={64} onDark={false} compact />
             <div className="pf-identity-text">
-              <div className="pf-name">{user?.full_name || 'User'}</div>
+              <div className="pf-name">{user ? displayUserName(user) : 'User'}</div>
               <div className="pf-idnum">{user?.id_number || 'No ID number'}</div>
               <div className="pf-chips">
                 <span className="pf-role">{roleLabel}</span>

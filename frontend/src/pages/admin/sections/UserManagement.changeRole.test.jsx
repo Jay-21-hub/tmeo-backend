@@ -43,18 +43,18 @@ afterEach(() => { cleanup(); localStorage.clear(); document.body.style.overflow 
 describe('UserManagement — Change Role', () => {
   it('offers Change Role only for active staff/enforcer rows that are not the signed-in admin', async () => {
     render(<UserManagement />)
-    await screen.findByText('Staff, Sam')
+    await screen.findByText('Sam Staff')
 
-    openMenu('Staff, Sam')
+    openMenu('Sam Staff')
     expect(screen.getByRole('menuitem', { name: /change role/i })).toBeTruthy()
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
 
-    for (const name of ['Admin, Ada', 'Gone, Gina', 'Off, Ora']) {
+    for (const name of ['Ada Admin', 'Gina Gone', 'Ora Off']) {
       openMenu(name)
       expect(screen.queryByRole('menuitem', { name: /change role/i })).toBeNull()
       fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
     }
-    openMenu('Enf, Eli')
+    openMenu('Eli Enf')
     expect(screen.getByRole('menuitem', { name: /change role/i })).toBeTruthy()
   })
 
@@ -66,7 +66,7 @@ describe('UserManagement — Change Role', () => {
     sessions_invalidated: true,
   }
   const submitChange = async () => {
-    openMenu('Staff, Sam')
+    openMenu('Sam Staff')
     fireEvent.click(screen.getByRole('menuitem', { name: /change role/i }))
     const dialog = await screen.findByRole('dialog')
     fireEvent.change(within(dialog).getByLabelText(/reason for change/i), { target: { value: 'Field duty' } })
@@ -77,7 +77,7 @@ describe('UserManagement — Change Role', () => {
   it('changes the role, toasts, refreshes the list and keeps the modal open showing the NEW ID', async () => {
     changeUserRole.mockResolvedValue({ data: SUCCESS })
     render(<UserManagement />)
-    await screen.findByText('Staff, Sam')
+    await screen.findByText('Sam Staff')
     const callsBefore = get.mock.calls.length
 
     await submitChange()
@@ -94,7 +94,7 @@ describe('UserManagement — Change Role', () => {
   it('Done closes the success state; outside click does not', async () => {
     changeUserRole.mockResolvedValue({ data: SUCCESS })
     render(<UserManagement />)
-    await screen.findByText('Staff, Sam')
+    await screen.findByText('Sam Staff')
     await submitChange()
 
     fireEvent.mouseDown(document.querySelector('.modal-overlay'))
@@ -108,10 +108,10 @@ describe('UserManagement — Change Role', () => {
   it('keeps the current search when the list refreshes after a successful change', async () => {
     changeUserRole.mockResolvedValue({ data: SUCCESS })
     render(<UserManagement />)
-    await screen.findByText('Staff, Sam')
+    await screen.findByText('Sam Staff')
     fireEvent.change(screen.getByPlaceholderText(/search users/i), { target: { value: 'sam' } })
     await waitFor(() => expect(get.mock.calls.at(-1)[1].params.search).toBe('sam'))
-    await screen.findByText('Staff, Sam')
+    await screen.findByText('Sam Staff')
     const callsBefore = get.mock.calls.length
 
     await submitChange()
@@ -125,10 +125,10 @@ describe('UserManagement — Change Role', () => {
   it('keeps the modal open and the list unchanged on a refused change', async () => {
     changeUserRole.mockImplementation(() => Promise.reject({ response: { status: 409, data: { code: 'schedules_exist', error: 'This enforcer still has schedules dated today or later. Remove them before changing the role.' } } }))
     render(<UserManagement />)
-    await screen.findByText('Enf, Eli')
+    await screen.findByText('Eli Enf')
     const callsBefore = get.mock.calls.length
 
-    openMenu('Enf, Eli')
+    openMenu('Eli Enf')
     fireEvent.click(screen.getByRole('menuitem', { name: /change role/i }))
     const dialog = await screen.findByRole('dialog')
     fireEvent.change(within(dialog).getByLabelText(/reason for change/i), { target: { value: 'Desk' } })
@@ -143,10 +143,10 @@ describe('UserManagement — Change Role', () => {
   it('reloads the list when the server says the row is stale', async () => {
     changeUserRole.mockImplementation(() => Promise.reject({ response: { status: 409, data: { code: 'stale_request', error: 'stale' } } }))
     render(<UserManagement />)
-    await screen.findByText('Staff, Sam')
+    await screen.findByText('Sam Staff')
     const callsBefore = get.mock.calls.length
 
-    openMenu('Staff, Sam')
+    openMenu('Sam Staff')
     fireEvent.click(screen.getByRole('menuitem', { name: /change role/i }))
     const dialog = await screen.findByRole('dialog')
     fireEvent.change(within(dialog).getByLabelText(/reason for change/i), { target: { value: 'x' } })
@@ -158,8 +158,8 @@ describe('UserManagement — Change Role', () => {
 
   it('Cancel closes the modal without calling the API', async () => {
     render(<UserManagement />)
-    await screen.findByText('Staff, Sam')
-    openMenu('Staff, Sam')
+    await screen.findByText('Sam Staff')
+    openMenu('Sam Staff')
     fireEvent.click(screen.getByRole('menuitem', { name: /change role/i }))
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: /^cancel$/i }))

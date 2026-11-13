@@ -10,6 +10,11 @@ import { X } from 'lucide-react'
  * header X do NOT call onClose (e.g. while a request is in flight). It is read
  * through a ref so toggling it never re-runs the focus/scroll-lock effect.
  *
+ * `onClose` and `initialFocus` are also read through refs: callers usually pass
+ * an inline arrow (new identity every render), and re-running the effect on
+ * every parent render would steal focus from the field being typed in
+ * (closing the mobile keyboard).
+ *
  * Optional, additive (existing callers unaffected):
  *  - `initialFocus`: CSS selector inside the panel to focus on open instead of
  *    the first control (e.g. Cancel on a destructive confirmation).
@@ -24,6 +29,8 @@ export default function Modal({ open, onClose, title, children, footer, width = 
   useEffect(() => { dismissibleRef.current = dismissible })
   const initialFocusRef = useRef(initialFocus)
   useEffect(() => { initialFocusRef.current = initialFocus })
+  const onCloseRef = useRef(onClose)
+  useEffect(() => { onCloseRef.current = onClose })
 
   useEffect(() => {
     if (!open) return
@@ -32,7 +39,7 @@ export default function Modal({ open, onClose, title, children, footer, width = 
     document.body.style.overflow = 'hidden'
 
     const onKeyDown = (e) => {
-      if (e.key === 'Escape' && dismissibleRef.current) onClose?.()
+      if (e.key === 'Escape' && dismissibleRef.current) onCloseRef.current?.()
       if (e.key === 'Tab' && panelRef.current) {
         const focusables = panelRef.current.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
         if (!focusables.length) return
@@ -50,7 +57,7 @@ export default function Modal({ open, onClose, title, children, footer, width = 
       document.body.style.overflow = prevOverflow
       lastFocused.current?.focus?.()
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 
@@ -59,7 +66,7 @@ export default function Modal({ open, onClose, title, children, footer, width = 
   // otherwise become a new containing block for this `position: fixed`
   // overlay, confining it to the content area instead of the full viewport.
   return createPortal(
-    <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && dismissibleRef.current) onClose?.() }}>
+    <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && dismissibleRef.current) onCloseRef.current?.() }}>
       <div
         className={`modal-panel ${mobileFullScreen ? 'modal-panel--mobile-full' : ''} ${className}`.trim()}
         ref={panelRef}
@@ -72,7 +79,7 @@ export default function Modal({ open, onClose, title, children, footer, width = 
         {title && (
           <div className="modal-header">
             <span id={titleId} className="text-h3">{title}</span>
-            <button className="btn btn-ghost btn-icon" onClick={() => { if (dismissibleRef.current) onClose?.() }} aria-label="Close dialog" aria-disabled={!dismissible || undefined}>
+            <button className="btn btn-ghost btn-icon" onClick={() => { if (dismissibleRef.current) onCloseRef.current?.() }} aria-label="Close dialog" aria-disabled={!dismissible || undefined}>
               <X size={18} strokeWidth={2} />
             </button>
           </div>

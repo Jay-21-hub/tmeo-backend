@@ -34,7 +34,7 @@ afterEach(() => { cleanup(); document.body.style.overflow = '' })
 describe('ChangeRoleModal', () => {
   it('shows the account, the fixed current -> new role, and what will happen', () => {
     setup()
-    expect(screen.getByText('Dela Cruz, Juan')).toBeTruthy()
+    expect(screen.getByText('Juan Dela Cruz')).toBeTruthy()
     expect(screen.getByText(/STF-2024-0001/)).toBeTruthy()
     expect(screen.getByText('Assessment Staff')).toBeTruthy()
     expect(screen.getByText('Traffic Enforcer')).toBeTruthy()
@@ -181,7 +181,7 @@ describe('ChangeRoleModal success state', () => {
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).getByText('Previous role').nextSibling.textContent).toBe('Assessment Staff')
     expect(within(dialog).getByText('New role').nextSibling.textContent).toBe('Traffic Enforcer')
-    expect(within(dialog).getByText('Dela Cruz, Juan')).toBeTruthy()
+    expect(within(dialog).getByText('Juan Dela Cruz')).toBeTruthy()
   })
 
   it('explains the sessions were invalidated and the user must sign in with the new ID', async () => {

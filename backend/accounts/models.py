@@ -105,6 +105,53 @@ class UserManager(BaseUserManager):
         """ID for `user` in `new_role`, using the account's ORIGINAL hired_year (D1)."""
         return self.generate_id_number(new_role, user.hired_year)
 
+    # ── Badge numbers ─────────────────────────────────────────────────────
+    # Format: TE-0001, TE-0002 ... Sequential, assigned by the server, never
+    # reused. Independent of id_number (the login ID) and of hired_year/role.
+    BADGE_PREFIX = 'TE-'
+
+    def _lock_badge_sequence(self):
+        # Same pattern as _lock_id_sequence: transaction-scoped advisory lock
+        # on PostgreSQL; only protects generate-AND-save inside one atomic block.
+        conn = transaction.get_connection(using=self._db)
+        if conn.vendor == 'postgresql' and conn.in_atomic_block:
+            with conn.cursor() as cursor:
+                cursor.execute('SELECT pg_advisory_xact_lock(hashtext(%s))', ['tmeo_badge_seq'])
+
+    def generate_badge_number(self):
+        """
+        Next free badge number (TE-0001, TE-0002, ...).
+
+        "Used" = held by ANY account (any role) OR recorded as an event-time
+        badge snapshot on a violation, so a badge that belonged to a deleted or
+        re-roled enforcer is never handed to someone else. Badges that do not
+        match the TE-#### format (legacy values) are ignored for sequencing.
+
+        Call inside the same transaction.atomic() as the save that uses it.
+        """
+        from violations.models import Violation
+
+        prefix = self.BADGE_PREFIX
+        self._lock_badge_sequence()
+
+        used = set(
+            CustomUser.objects.filter(badge_number__startswith=prefix)
+            .values_list('badge_number', flat=True)
+        )
+        used |= set(
+            Violation.objects.filter(enforcer_badge_snapshot__startswith=prefix)
+            .values_list('enforcer_badge_snapshot', flat=True)
+            .distinct()
+        )
+
+        last_seq = 0
+        for badge in used:
+            tail = (badge or '')[len(prefix):]
+            if tail.isdigit():
+                last_seq = max(last_seq, int(tail))
+
+        return f"{prefix}{last_seq + 1:04d}"
+
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
 
