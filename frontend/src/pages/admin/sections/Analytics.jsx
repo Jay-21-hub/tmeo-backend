@@ -223,7 +223,7 @@ export default function Analytics({ scrollTo }) {
     rows.push(['Scope', data.scope?.label || scope])
     rows.push(['Filters', chips.length ? chips.map(c => `${FILTER_LABELS[c.key]}: ${c.label}`).join('; ') : 'None'])
     rows.push(['Total Violations', data.total ?? 0])
-    rows.push(['Total Penalty', data.total_penalty ?? 0])
+    rows.push(['Total Fines', data.total_penalty ?? 0])
     rows.push(['Total Collected', data.total_collected ?? 0])
     rows.push([])
     rows.push(['Location', 'Violations', 'Total Fines'])
@@ -369,7 +369,7 @@ export default function Analytics({ scrollTo }) {
         { label: 'Violations counted', value: t.count.toLocaleString(), highlight: true },
         { label: '% of all violations counted', value: `${pct}%` },
         { label: 'Fine per violation', value: peso(t.fine_per) },
-        { label: 'Total penalties', value: peso(t.total_penalty), highlight: true },
+        { label: 'Total fines', value: peso(t.total_penalty), highlight: true },
         { divider: true },
         { label: 'Period', value: periodLabel },
       ],
@@ -632,7 +632,7 @@ export default function Analytics({ scrollTo }) {
         {/* ── KPI Cards ── */}
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiCols}, minmax(0, 1fr))`, gap: 16, marginBottom: 20 }}>
           <StatCard label={`Total Violations (${periodLabel})`} value={countText(summary.total)} icon={FileText} accent="var(--blue-600)" trend={comparison?.total_pct} sublabel={comparison?.label || undefined} />
-          <StatCard label="Total Penalties Assessed" value={moneyText(summary.total_penalty)} icon={DollarSign} accent="#D97706" trend={comparison?.total_penalty_pct} sublabel="Assessed amounts on tickets issued in this period" />
+          <StatCard label="Total Fines Assessed" value={moneyText(summary.total_penalty)} icon={DollarSign} accent="#D97706" trend={comparison?.total_penalty_pct} sublabel="Assessed amounts on tickets issued in this period" />
           <StatCard label="Total Collected" value={moneyText(summary.total_collected)} icon={TrendingUp} accent="#7C3AED" trend={comparison?.total_collected_pct} sublabel="Counted by date issued, not payment date" />
           <StatCard label="Pending Violations" value={countText(summary.pending)} icon={Activity} accent="var(--warning-600)" trend={comparison?.pending_pct} sublabel="Issued in this period and still pending" />
           <StatCard label="Paid Violations" value={countText(summary.paid)} icon={Shield} accent="var(--success-600)" trend={comparison?.paid_pct} sublabel={comparison?.label || undefined} />
@@ -730,7 +730,7 @@ export default function Analytics({ scrollTo }) {
                   data={byType.slice(0, 8)} nameWidth={170}
                   isActive={(r) => !!r.violation_type__code && r.violation_type__code === filters.violation_type}
                   onSelect={(r) => r?.violation_type__code && toggleFilter('violation_type', r.violation_type__code, r.label)}
-                  extra={(r) => [`Share of all violations counted: ${typeTotal ? ((r.count / typeTotal) * 100).toFixed(1) : '0.0'}%`, r.violation_type__code ? `Code: ${r.violation_type__code}` : null, r.violation_type__category ? `Category: ${r.violation_type__category}` : null, `Penalties: ${peso(r.total_penalty)}`, 'Click to filter the dashboard'].filter(Boolean)}
+                  extra={(r) => [`Share of all violations counted: ${typeTotal ? ((r.count / typeTotal) * 100).toFixed(1) : '0.0'}%`, r.violation_type__code ? `Code: ${r.violation_type__code}` : null, r.violation_type__category ? `Category: ${r.violation_type__category}` : null, `Fines: ${peso(r.total_penalty)}`, 'Click to filter the dashboard'].filter(Boolean)}
                 />
                 </ChartErrorBoundary>
                 {selectedType && (
@@ -976,7 +976,7 @@ export default function Analytics({ scrollTo }) {
         <div style={{ display: 'grid', gridTemplateColumns: cols(PAIR), gap: 16, marginBottom: 16 }}>
           <div id="an-collection">
             <Card style={{ height: '100%' }}>
-              <CardHeader title="Collection Overview" subtitle="Share of assessed penalties that were collected in this period" />
+              <CardHeader title="Collection Overview" subtitle="Share of assessed fines that were collected in this period" />
               <div style={{ display: 'grid', gridTemplateColumns: cols('160px minmax(0, 1fr)', stackTiny || (!stackPair && rootWidth < 1000)), gap: 20, alignItems: 'center', marginBottom: 14 }}>
                 <div style={{ position: 'relative', width: 160, height: 160 }}>
                   <ChartErrorBoundary>
@@ -985,7 +985,7 @@ export default function Analytics({ scrollTo }) {
                       <Pie
                         data={[
                           { name: 'Collected', value: collectionOverview?.total_collected || 0 },
-                          { name: 'Outstanding', value: collectionOverview?.outstanding || 0 },
+                          { name: 'Unpaid', value: collectionOverview?.outstanding || 0 },
                         ]}
                         dataKey="value" innerRadius={55} outerRadius={75} startAngle={90} endAngle={-270} stroke="none"
                       >
@@ -1001,9 +1001,9 @@ export default function Analytics({ scrollTo }) {
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ fontSize: 13, color: 'var(--slate-700)' }}>Total Penalty Assessed: <strong>{peso(collectionOverview?.total_penalty)}</strong></div>
+                  <div style={{ fontSize: 13, color: 'var(--slate-700)' }}>Total Fines Assessed: <strong>{peso(collectionOverview?.total_penalty)}</strong></div>
                   <div style={{ fontSize: 13, color: 'var(--slate-700)' }}>Total Collected: <strong>{peso(collectionOverview?.total_collected)}</strong></div>
-                  <div style={{ fontSize: 13, color: 'var(--slate-700)' }}>Not yet collected (this period): <strong>{peso(collectionOverview?.outstanding)}</strong></div>
+                  <div style={{ fontSize: 13, color: 'var(--slate-700)' }}>Unpaid (this period): <strong>{peso(collectionOverview?.outstanding)}</strong></div>
                 </div>
               </div>
               <ChartNote>Paid, pending, and processing counts are in Violations by Status. This chart is the money: assessed versus collected for the same period.</ChartNote>
@@ -1094,17 +1094,17 @@ export default function Analytics({ scrollTo }) {
 
         <div id="an-aging" style={{ display: 'grid', gridTemplateColumns: cols(PAIR), gap: 16, marginBottom: 16 }}>
           <Card>
-            <CardHeader title="Outstanding Tickets by Age" subtitle="How long unpaid violations have been waiting — as of today" />
+            <CardHeader title="Unpaid Violations by Days Waiting" subtitle="How long unpaid violations have been waiting — as of today" />
             {aging && aging.total_count > 0 ? (
               <>
                 <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 8 }}>
                   <div><div className="text-display" style={{ fontSize: 28 }}>{aging.total_count.toLocaleString()}</div><div className="text-caption">unpaid violations</div></div>
-                  <div><div className="text-display" style={{ fontSize: 28 }}>{peso(aging.total_amount)}</div><div className="text-caption">outstanding</div></div>
+                  <div><div className="text-display" style={{ fontSize: 28 }}>{peso(aging.total_amount)}</div><div className="text-caption">unpaid amount</div></div>
                 </div>
                 <ChartErrorBoundary><AgingChart buckets={aging.buckets} /></ChartErrorBoundary>
               </>
-            ) : <EmptyChart icon={Hourglass} message="No unpaid violations are outstanding" />}
-            {aging && <ChartNote>Counts active pending and processing tickets as of {aging.as_of}. It ignores the period filter. These are tickets that are not paid yet.</ChartNote>}
+            ) : <EmptyChart icon={Hourglass} message="No unpaid violations to show" />}
+            {aging && <ChartNote>Counts violations that are still pending or processing as of {aging.as_of}. It ignores the period filter.</ChartNote>}
           </Card>
           <Card>
             <CardHeader title="Payment Duration" subtitle="How many days paid violations took from the issue date to the payment date" />
@@ -1117,7 +1117,7 @@ export default function Analytics({ scrollTo }) {
                 <ChartErrorBoundary><PaymentDurationChart buckets={data.payment_duration.buckets} /></ChartErrorBoundary>
               </>
             ) : <EmptyChart icon={DollarSign} message="No paid violations with both an issue date and a payment date in this selection" />}
-            <ChartNote>Only violations that are paid and have both an issue timestamp and a payment date. The period filter applies. Unpaid tickets are in Outstanding Tickets by Age.</ChartNote>
+            <ChartNote>Only violations that are paid and have both an issue timestamp and a payment date. The period filter applies. Unpaid violations are in Unpaid Violations by Days Waiting.</ChartNote>
           </Card>
         </div>
 

@@ -40,7 +40,7 @@ describe('Analytics period wiring', () => {
   it('loads Today, and This week sends Monday-through-today params', async () => {
     get.mockResolvedValue({ data: payload(4) })
     render(<Analytics />)
-    expect(await screen.findByText('Outstanding Tickets by Age')).toBeTruthy()
+    expect(await screen.findByText('Unpaid Violations by Days Waiting')).toBeTruthy()
     expect(analyticsCalls()[0][1].params).toEqual({ ...periodParams('today', new Date()), scope: 'all' })
 
     fireEvent.click(within(periodGroup()).getByRole('button', { name: 'This week' }))
@@ -52,7 +52,7 @@ describe('Analytics period wiring', () => {
   it('does not request analytics while a custom range is being typed', async () => {
     get.mockResolvedValue({ data: payload(4) })
     render(<Analytics />)
-    await screen.findByText('Outstanding Tickets by Age')
+    await screen.findByText('Unpaid Violations by Days Waiting')
     const before = analyticsCalls().length
     fireEvent.click(within(periodGroup()).getByRole('button', { name: 'Custom' }))
     fireEvent.change(screen.getByLabelText('From'), { target: { value: '2024-05-01' } })
@@ -99,7 +99,7 @@ describe('Analytics period wiring', () => {
       return Promise.resolve({ data: body })
     })
     render(<Analytics />)
-    await screen.findByText('Outstanding Tickets by Age')
+    await screen.findByText('Unpaid Violations by Days Waiting')
 
     const location = screen.getByLabelText('Filter by location')
     expect([...location.options].map(o => o.value)).toContain('Perez Park')
