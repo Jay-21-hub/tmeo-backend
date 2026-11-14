@@ -331,6 +331,121 @@ class ViolatorLookupScoping(BaseRoleTestCase):
         # same scoping rule as the license_number lookup above.
         self.assertEqual(body['history'], [])
 
+    def test_plate_lookup_includes_the_driver_recorded_on_that_plate(self):
+        v = self._make_violation(
+            self.enforcer_a, 'PLATE-DRV', license_number='X01-99-000222',
+            violator_name='REYES, ANA',
+        )
+        v.plate_number = 'DRV 1001'
+        v.address = '12 Rizal Street'
+        v.vehicle_type = 'Motorcycle'
+        v.save(update_fields=['plate_number', 'address', 'vehicle_type'])
+        res = self.as_user(self.staff).get(
+            '/api/violations/violator-lookup/?plate_number=DRV%201001',
+        )
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertEqual(body['vehicle']['violator_name'], 'REYES, ANA')
+        self.assertEqual(body['vehicle']['address'], '12 Rizal Street')
+        self.assertNotIn('license_number', body['vehicle'])
+        self.assertIsNone(body['personal'])
+        self.assertEqual(body['suggestions'], [])
+
+    def test_name_search_requires_three_characters_and_caps_at_five(self):
+        short = self.as_user(self.enforcer_a).get(
+            '/api/violations/violator-lookup/?last_name=Ze',
+        )
+        self.assertEqual(short.status_code, 400)
+        for i in range(6):
+            self._make_violation(
+                self.enforcer_a, f'NAME-{i}', license_number=f'N26-00-00000{i}',
+                violator_name=f'Zedperson {i}, Ana',
+            )
+            Violation.objects.filter(ovr_number=f'NAME-{i}').update(address=f'Street {i}')
+        self._make_violation(
+            self.enforcer_a, 'NAME-OTHER', license_number='N26-00-000099',
+            violator_name='Zedperson 0, Luis',
+        )
+        res = self.as_user(self.enforcer_a).get(
+            '/api/violations/violator-lookup/?last_name=Zed&first_name=Ana',
+        )
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertLessEqual(len(body['suggestions']), 5)
+        self.assertGreaterEqual(len(body['suggestions']), 1)
+        self.assertTrue(all('Ana' in row['violator_name'] for row in body['suggestions']))
+        self.assertTrue(all(set(row) == {'violator_name', 'address'} for row in body['suggestions']))
+        self.assertEqual(body['history'], [])
+        self.assertIsNone(body['match'])
+        self.assertIsNone(body['personal'])
+
+    def test_name_search_denies_anonymous_and_other_roles(self):
+        self.client.force_authenticate(None)
+        anon = self.client.get('/api/violations/violator-lookup/?last_name=Zed')
+        self.assertEqual(anon.status_code, 401)
+        outsider = CustomUser.objects.create_user(
+            email='outsider-lookup@tmeo.test', password='TmeoTest!2026',
+            full_name='Outsider', id_number='OUT-LOOKUP', role='staff',
+        )
+        CustomUser.objects.filter(pk=outsider.pk).update(role='citizen')
+        outsider.refresh_from_db()
+        denied = self.as_user(outsider).get('/api/violations/violator-lookup/?last_name=Zed')
+        self.assertEqual(denied.status_code, 403)
+
+    def test_name_search_denies_anonymous(self):
+        self.client.force_authenticate(None)
+        res = self.client.get('/api/violations/violator-lookup/?last_name=Zed')
+        self.assertEqual(res.status_code, 401)
+
+    def test_plate_lookup_denies_anonymous(self):
+        self.client.force_authenticate(None)
+        res = self.client.get('/api/violations/violator-lookup/?plate_number=DRV%201001')
+        self.assertEqual(res.status_code, 401)
+
+    def test_name_search_denies_unknown_role(self):
+        outsider = CustomUser.objects.create_user(
+            email='outsider-name@tmeo.test', password='TmeoTest!2026',
+            full_name='Outsider Name', id_number='OUT-NAME', role='staff',
+        )
+        CustomUser.objects.filter(pk=outsider.pk).update(role='citizen')
+        outsider.refresh_from_db()
+        res = self.as_user(outsider).get('/api/violations/violator-lookup/?last_name=Zed')
+        self.assertEqual(res.status_code, 403)
+
+    def test_plate_lookup_denies_unknown_role(self):
+        outsider = CustomUser.objects.create_user(
+            email='outsider-plate@tmeo.test', password='TmeoTest!2026',
+            full_name='Outsider Plate', id_number='OUT-PLATE', role='staff',
+        )
+        CustomUser.objects.filter(pk=outsider.pk).update(role='citizen')
+        outsider.refresh_from_db()
+        res = self.as_user(outsider).get('/api/violations/violator-lookup/?plate_number=DRV%201001')
+        self.assertEqual(res.status_code, 403)
+
+    def test_name_search_denies_inactive_account(self):
+        self.staff.is_active = False
+        self.staff.save(update_fields=['is_active'])
+        res = self.as_user(self.staff).get('/api/violations/violator-lookup/?last_name=Zed')
+        self.assertEqual(res.status_code, 403)
+
+    def test_plate_lookup_denies_inactive_account(self):
+        self.staff.is_active = False
+        self.staff.save(update_fields=['is_active'])
+        res = self.as_user(self.staff).get('/api/violations/violator-lookup/?plate_number=DRV%201001')
+        self.assertEqual(res.status_code, 403)
+
+    def test_name_search_denies_separated_account(self):
+        self.staff.employment_status = CustomUser.EmploymentStatus.RESIGNED
+        self.staff.save(update_fields=['employment_status'])
+        res = self.as_user(self.staff).get('/api/violations/violator-lookup/?last_name=Zed')
+        self.assertEqual(res.status_code, 403)
+
+    def test_plate_lookup_denies_separated_account(self):
+        self.staff.employment_status = CustomUser.EmploymentStatus.RESIGNED
+        self.staff.save(update_fields=['employment_status'])
+        res = self.as_user(self.staff).get('/api/violations/violator-lookup/?plate_number=DRV%201001')
+        self.assertEqual(res.status_code, 403)
+
     def test_plate_number_lookup_no_match_is_not_an_error(self):
         res = self.as_user(self.enforcer_a).get(
             '/api/violations/violator-lookup/?plate_number=ZZZ9999NOTHING',

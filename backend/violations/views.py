@@ -496,6 +496,35 @@ class ViolationCreateView(generics.CreateAPIView):
         )
 
 
+def _name_suggestions(last_name, first_name):
+    """Up to 5 distinct people whose stored name starts with the last name.
+
+    Names are stored as "Last, First ..." (Assessment also uses commas
+    between the remaining parts). First name, when given, must appear
+    after the comma. Only name and address are returned.
+    """
+    qs = Violation.objects.filter(violator_name__istartswith=last_name)
+    first = (first_name or '').strip()
+    if first:
+        qs = qs.filter(
+            Q(violator_name__icontains=f', {first}')
+            | Q(violator_name__icontains=f',{first}')
+        )
+    seen = set()
+    suggestions = []
+    for row in qs.order_by('-date_issued').values('violator_name', 'address')[:200]:
+        name = (row['violator_name'] or '').strip()
+        address = (row['address'] or '').strip()
+        key = (name.lower(), address.lower())
+        if not name or key in seen:
+            continue
+        seen.add(key)
+        suggestions.append({'violator_name': name, 'address': address})
+        if len(suggestions) == 5:
+            break
+    return suggestions
+
+
 class ViolatorLookupView(APIView):
     """
     Looks up a violator's history by license number and/or plate number,
@@ -516,10 +545,35 @@ class ViolatorLookupView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if getattr(request.user, 'role', None) not in ('enforcer', 'staff', 'admin'):
+        user = request.user
+        if (
+            getattr(user, 'role', None) not in ('enforcer', 'staff', 'admin')
+            or not getattr(user, 'is_active', False)
+            or getattr(user, 'is_separated', False)
+        ):
             return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         license_number = (request.query_params.get('license_number') or '').strip()
         plate_number = (request.query_params.get('plate_number') or '').strip()
+        last_name = (request.query_params.get('last_name') or '').strip()
+        first_name = (request.query_params.get('first_name') or '').strip()
+
+        if not license_number and not plate_number and last_name:
+            if len(last_name) < 3:
+                return Response(
+                    {'error': 'last_name must be at least 3 characters.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            suggestions = _name_suggestions(last_name, first_name)
+            return Response({
+                'found': bool(suggestions),
+                'violation_count': 0,
+                'is_repeat_offender': False,
+                'match': None,
+                'personal': None,
+                'vehicle': None,
+                'history': [],
+                'suggestions': suggestions,
+            })
 
         if not license_number and not plate_number:
             return Response(
@@ -563,6 +617,8 @@ class ViolatorLookupView(APIView):
                     'vehicle_brand': car.vehicle_brand,
                     'vehicle_model': car.vehicle_model,
                     'vehicle_use': car.vehicle_use,
+                    'violator_name': car.violator_name,
+                    'address': car.address,
                 }
 
         if not qs.exists():
@@ -574,6 +630,7 @@ class ViolatorLookupView(APIView):
                 'personal': personal,
                 'vehicle': vehicle,
                 'history': [],
+                'suggestions': [],
             })
 
         # This lookup runs while filing a NEW OVR dated "now", so the
@@ -625,11 +682,14 @@ class ViolatorLookupView(APIView):
                 'vehicle_brand':       latest.vehicle_brand,
                 'vehicle_model':       latest.vehicle_model,
             },
-            # License fills driver details only. Plate fills vehicle details only.
-            # Confiscation and the violations on the old ticket are not included.
+            # License fills driver details only. Plate fills vehicle details and
+            # the name/address stored on that same record. Neither includes the
+            # old ticket's violations or confiscation choice. suggestions is the
+            # name-search list and stays empty on these paths.
             'personal': personal,
             'vehicle': vehicle,
             'history': history,
+            'suggestions': [],
         })
 
 

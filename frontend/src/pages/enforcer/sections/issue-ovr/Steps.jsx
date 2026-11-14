@@ -4,12 +4,13 @@ import { Alert, Button, Field, ReviewRow, ReviewSection, TextInput, Textarea } f
 import { ErrorState } from '../../../../components/ui/States'
 import { toTitleCase } from '../../../../utils/helpers'
 import PreviousRecordPrompt from '../../../../components/common/PreviousRecordPrompt'
+import NameSuggestions from '../../../../components/common/NameSuggestions'
 import { formatScanFailure, hasReadableLicense } from '../../../../utils/licenseScan'
 import LicenseScanner from './LicenseScanner'
 import LicensePhotoUpload from './LicensePhotoUpload'
 import VehicleFields from './VehicleFields'
 import {
-  buildViolatorName, formatIssuedDate, formatIssuedTime, formatIssuedDateTime, prettyCategory,
+  buildViolatorName, driverLicenseForSubmit, formatIssuedDate, formatIssuedTime, formatIssuedDateTime, prettyCategory,
 } from './helpers'
 
 const peso = (n) => `₱${Number(n || 0).toLocaleString('en-PH')}`
@@ -50,14 +51,12 @@ function SegmentedField({ name, label, value, options, onChange }) {
  * the two cards changed — every field, handler and payload key is the same.
  *
  * License status is an explicit enforcer choice. Scanning a license never
- * flips it (mergeOcrIntoForm doesn't touch license_status). Confiscated shows
- * a summary only — the existing Enforcer data model has no extra confiscation
- * inputs (Staff completes the document details during assessment), and the
- * License no. is read live from form.license_number, so there is one source
- * of truth and nothing to type twice. */
+ * flips it (mergeOcrIntoForm doesn't touch license_status). The license
+ * number is entered only after Confiscated is chosen. Staff still completes
+ * the remaining confiscation details during assessment. */
 export function StepDriverVehicle({
-  form, setForm, errors, repeatInfo, lookupLoading, onLookup, onApplyOcr,
-  personalSaved, onUsePersonal,
+  form, setForm, errors, repeatInfo, onApplyOcr,
+  nameSuggestions, onNameLookup, onSelectName,
   plateLookupLoading, vehicleSaved, onUseVehicle, onPlateLookup,
 }) {
   const [scanOpen, setScanOpen] = useState(false)
@@ -70,7 +69,6 @@ export function StepDriverVehicle({
   const openUpload = () => { setUploadOpen(o => !o); setScanOpen(false) }
 
   const confiscated = form.license_status === 'confiscated'
-  const licenseNo = (form.license_number || '').trim()
 
   return (
     <>
@@ -143,12 +141,12 @@ export function StepDriverVehicle({
           <div className="ovr-grid ovr-grid--name">
             <Field label="Last name" required error={errors.last_name}>
               {id => <TextInput id={id} value={form.last_name} error={!!errors.last_name} placeholder="Dela Cruz" autoComplete="off"
-                onChange={e => set({ last_name: e.target.value })}
+                onChange={e => { set({ last_name: e.target.value }); onNameLookup?.(e.target.value, form.first_name) }}
                 onBlur={e => set({ last_name: toTitleCase(e.target.value) })} />}
             </Field>
             <Field label="First name" required error={errors.first_name}>
               {id => <TextInput id={id} value={form.first_name} error={!!errors.first_name} placeholder="Juan" autoComplete="off"
-                onChange={e => set({ first_name: e.target.value })}
+                onChange={e => { set({ first_name: e.target.value }); onNameLookup?.(form.last_name, e.target.value) }}
                 onBlur={e => set({ first_name: toTitleCase(e.target.value) })} />}
             </Field>
             <Field label="M.I.">
@@ -157,6 +155,7 @@ export function StepDriverVehicle({
                 onBlur={e => set({ middle_initial: toTitleCase(e.target.value) })} />}
             </Field>
           </div>
+          <NameSuggestions suggestions={nameSuggestions} onSelect={onSelectName} />
 
           <Field label="Address">
             {id => <TextInput id={id} value={form.address} placeholder="Barangay, City / Municipality" autoComplete="off"
@@ -164,34 +163,34 @@ export function StepDriverVehicle({
               onBlur={e => set({ address: toTitleCase(e.target.value) })} />}
           </Field>
 
-          <Field label="License no."
-            helper={lookupLoading ? 'Checking records…' : 'A matching license can offer this driver’s saved details.'}>
-            {id => <TextInput id={id} className="mono" value={form.license_number} placeholder="A01-23-456789" autoComplete="off"
-              onChange={e => { set({ license_number: e.target.value }); onLookup(e.target.value) }}
-              onBlur={e => onLookup(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onLookup(form.license_number) } }} />}
-          </Field>
-          <PreviousRecordPrompt visible={personalSaved} onUse={onUsePersonal} />
-
-          {repeatInfo?.violation_count > 0 && (
-            <Alert tone="warning" title="Repeat violator">
-              {repeatInfo.violation_count} earlier violation{repeatInfo.violation_count !== 1 ? 's' : ''} on record for this license.
-            </Alert>
-          )}
+          {form.scanned_license ? (
+            <p className="ovr-inline-note" data-testid="scanned-license">Scanned license: {form.scanned_license}</p>
+          ) : null}
 
           <SegmentedField name="license_status" label="License status" value={form.license_status}
             options={[['not_confiscated', 'Not confiscated'], ['confiscated', 'Confiscated']]}
-            onChange={v => set({ license_status: v })} />
+            onChange={v => {
+              if (v === 'confiscated') {
+                set({
+                  license_status: 'confiscated',
+                  confiscated_license_draft: form.confiscated_license_draft || form.scanned_license || '',
+                })
+                return
+              }
+              set({
+                license_status: 'not_confiscated',
+                license_number: form.scanned_license || '',
+                confiscated_license_draft: '',
+              })
+            }} />
 
           {confiscated && (
             <div className="ovr-confiscated ovr-reveal" role="group" aria-label="Confiscated driver's license">
               <span className="ovr-confiscated-title">Driver&apos;s license confiscated</span>
-              <div className="ovr-confiscated-row">
-                <span className="ovr-confiscated-label">License no.</span>
-                {licenseNo
-                  ? <span className="ovr-confiscated-value mono">{licenseNo}</span>
-                  : <span className="ovr-confiscated-missing">Not entered yet. Fill in License no. above.</span>}
-              </div>
+              <Field label="License no.">
+                {id => <TextInput id={id} className="mono" value={form.confiscated_license_draft || ''} placeholder="A01-23-456789" autoComplete="off"
+                  onChange={e => set({ confiscated_license_draft: e.target.value })} />}
+              </Field>
               <p className="ovr-confiscated-note">Staff completes the remaining confiscation details during assessment.</p>
             </div>
           )}
@@ -203,7 +202,7 @@ export function StepDriverVehicle({
         <div className="ovr-stack">
           <div className="ovr-grid ovr-grid--2">
             <Field label="Plate / body no."
-              helper={plateLookupLoading ? 'Checking records…' : 'A matching plate can offer this vehicle’s saved details.'}>
+              helper={plateLookupLoading ? 'Checking records…' : 'A matching plate can offer this vehicle and its last recorded driver.'}>
               {id => <TextInput id={id} className="mono ovr-plate" value={form.plate_number} placeholder="ABC 1234"
                 autoCapitalize="characters" autoComplete="off"
                 onChange={e => { const plate = e.target.value.toUpperCase(); set({ plate_number: plate }); onPlateLookup?.(plate) }}
@@ -216,6 +215,11 @@ export function StepDriverVehicle({
             </Field>
           </div>
           <PreviousRecordPrompt visible={vehicleSaved} onUse={onUseVehicle} />
+          {repeatInfo?.violation_count > 0 && (
+            <Alert tone="warning" title="Repeat violator">
+              {repeatInfo.violation_count} earlier violation{repeatInfo.violation_count !== 1 ? 's' : ''} on record for this plate.
+            </Alert>
+          )}
 
           <VehicleFields form={form} setForm={setForm} errors={errors} />
 
@@ -353,7 +357,7 @@ export function StepReview({ form, setForm, errors, selectedViolations, totalPen
         <ReviewSection title="Driver" action={edit(1)}>
           <ReviewRow label="Name" value={buildViolatorName(form)} />
           <ReviewRow label="Address" value={form.address} />
-          <ReviewRow label="License no." value={form.license_number} />
+          <ReviewRow label="License no." value={driverLicenseForSubmit(form)} />
           <ReviewRow label="License status" value={form.license_status === 'confiscated' ? 'Confiscated' : 'Not confiscated'} />
         </ReviewSection>
 

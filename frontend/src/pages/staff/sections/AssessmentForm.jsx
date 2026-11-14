@@ -13,7 +13,7 @@ import PrintConfirmModal from '../../../components/print/PrintConfirmModal'
 import usePrintConfirmation from '../../../components/print/usePrintConfirmation'
 import './assessment/assessmentFlow.css'
 import { buildReceiptTicket } from './assessment/receiptTicket'
-import { hasPersonalDetails, hasVehicleDetails } from '../../../utils/savedViolator'
+import { hasVehicleDetails } from '../../../utils/savedViolator'
 import { filterTypesByVehicle, pruneSelectedIds } from '../../../utils/violationTypeFilter'
 
 export default function AssessmentForm({ violationData = null, onSuccess }) {
@@ -50,9 +50,10 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
   const [loadingTypes, setLoadingTypes] = useState(true)
   const [lookupLoading, setLookupLoading] = useState(false)
   const [repeatInfo, setRepeatInfo] = useState(null)
-  const [personalSaved, setPersonalSaved] = useState(null)
   const [vehicleSaved, setVehicleSaved] = useState(null)
+  const [nameSuggestions, setNameSuggestions] = useState([])
   const lookupTimerRef = useRef(null)
+  const nameTimerRef = useRef(null)
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
   const [_submittedId, setSubmittedId] = useState(null)
@@ -179,46 +180,51 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
 
   const toggleId = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
 
-  const runLookup = async (kind, value) => {
+  const plateReady = (value) => (value || '').replace(/\s+/g, '').length >= 3
+
+  const runPlateLookup = async (value) => {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return
     setLookupLoading(true)
     try {
-      const param = kind === 'license'
-        ? `license_number=${encodeURIComponent(value)}`
-        : `plate_number=${encodeURIComponent(value)}`
-      const res = await api.get(`/api/violations/violator-lookup/?${param}`)
+      const res = await api.get(`/api/violations/violator-lookup/?plate_number=${encodeURIComponent(value)}`)
       const data = res.data
-      if (kind === 'license') {
-        setPersonalSaved(hasPersonalDetails(data?.personal) ? data.personal : null)
-        setRepeatInfo(data?.violation_count > 0 ? data : null)
-      } else {
-        setVehicleSaved(hasVehicleDetails(data?.vehicle) ? data.vehicle : null)
-      }
+      setVehicleSaved(hasVehicleDetails(data?.vehicle) || data?.vehicle?.violator_name ? data.vehicle : null)
+      setRepeatInfo(data?.violation_count > 0 ? data : null)
     } catch { /* offline or unavailable — leave the form as typed */ }
     finally { setLookupLoading(false) }
   }
 
-  const handleLookup = (kind, value) => {
+  const handlePlateLookup = (value) => {
     clearTimeout(lookupTimerRef.current)
     const trimmed = (value || '').trim()
-    if (!trimmed) {
-      if (kind === 'license') { setPersonalSaved(null); setRepeatInfo(null) }
-      else setVehicleSaved(null)
-      return
-    }
-    lookupTimerRef.current = setTimeout(() => runLookup(kind, trimmed), 400)
+    if (!plateReady(trimmed)) { setVehicleSaved(null); return }
+    lookupTimerRef.current = setTimeout(() => runPlateLookup(trimmed), 400)
   }
 
-  const applyPersonal = () => {
-    if (!personalSaved) return
-    const saved = personalSaved
+  const runNameLookup = async (last, first) => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+    try {
+      const params = new URLSearchParams({ last_name: last.trim() })
+      if ((first || '').trim()) params.set('first_name', first.trim())
+      const res = await api.get(`/api/violations/violator-lookup/?${params}`)
+      setNameSuggestions(Array.isArray(res.data?.suggestions) ? res.data.suggestions.slice(0, 5) : [])
+    } catch { setNameSuggestions([]) }
+  }
+
+  const handleNameLookup = (last, first) => {
+    clearTimeout(nameTimerRef.current)
+    if ((last || '').trim().length < 3) { setNameSuggestions([]); return }
+    nameTimerRef.current = setTimeout(() => runNameLookup(last, first), 400)
+  }
+
+  const applyName = (person) => {
+    if (!person) return
     setForm(prev => ({
       ...prev,
-      ...(saved.violator_name ? { full_name: saved.violator_name } : {}),
-      ...(saved.address ? { address: saved.address } : {}),
-      ...(saved.license_number ? { license_number: saved.license_number } : {}),
+      ...(person.violator_name ? { full_name: person.violator_name } : {}),
+      ...(person.address ? { address: person.address } : {}),
     }))
-    setPersonalSaved(null)
+    setNameSuggestions([])
   }
 
   const applyVehicle = () => {
@@ -232,6 +238,8 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
       ...(saved.vehicle_brand ? { vehicle_brand: saved.vehicle_brand } : {}),
       ...(saved.vehicle_model ? { vehicle_model: saved.vehicle_model } : {}),
       ...(saved.vehicle_use ? { vehicle_use: saved.vehicle_use } : {}),
+      ...(saved.violator_name ? { full_name: saved.violator_name } : {}),
+      ...(saved.address ? { address: saved.address } : {}),
     }))
     setVehicleSaved(null)
   }
@@ -465,7 +473,7 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
 
   const resetForm = () => {
     setForm({ full_name: '', address: '', license_number: '', plate_number: '', registration_number: '', vehicle_use: '', remarks: '', vehicle_type: '', vehicle_brand: '', vehicle_model: '', license_status: 'not_confiscated', confiscated_document_type: '', confiscated_document_name: '', confiscated_document_number: '', ovr_number: '', date: formatDate(), time: formatTime(), place_of_violation: '', or_number: '', assessed_by: currentUser, violation_id: '' })
-    setSelectedIds([]); setVtSearch(''); setErrors({}); setSubmittedId(null); setLookupDone(false); setPaidRecord(null); setTicketModal(null); setPrintJob(null); setStep(1)
+    setSelectedIds([]); setVtSearch(''); setErrors({}); setSubmittedId(null); setRepeatInfo(null); setVehicleSaved(null); setNameSuggestions([]); setPaidRecord(null); setTicketModal(null); setPrintJob(null); setStep(1)
   }
 
   const doSave = async () => {
@@ -576,9 +584,12 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
       {step === 1 && (
         <AssessmentStep1
           form={form} errors={errors} lookupLoading={lookupLoading} repeatInfo={repeatInfo} violationData={violationData}
-          personalSaved={!!personalSaved} vehicleSaved={!!vehicleSaved}
-          onUsePersonal={applyPersonal} onUseVehicle={applyVehicle}
-          onChange={handleChange} onLookup={handleLookup} onNext={handleNextStep}
+          vehicleSaved={!!vehicleSaved}
+          nameSuggestions={nameSuggestions}
+          onUseVehicle={applyVehicle}
+          onNameLookup={handleNameLookup}
+          onSelectName={applyName}
+          onChange={handleChange} onPlateLookup={handlePlateLookup} onNext={handleNextStep}
           onViewTicket={handleViewExistingTicket} viewingTicketId={viewingTicketId}
         />
       )}

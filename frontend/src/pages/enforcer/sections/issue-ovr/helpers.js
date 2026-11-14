@@ -43,7 +43,8 @@ export function emptyForm() {
   return {
     ovr_number: '',
     last_name: '', first_name: '', middle_initial: '',
-    license_number: '', license_status: 'not_confiscated', address: '',
+    license_number: '', scanned_license: '', confiscated_license_draft: '',
+    license_status: 'not_confiscated', address: '',
     plate_number: '', registration_number: '',
     vehicle_type: '', vehicle_brand: '', vehicle_model: '', vehicle_use: 'private',
     location: '', latitude: '', longitude: '',
@@ -57,7 +58,8 @@ export function emptyForm() {
 }
 
 const TYPED_FIELDS = [
-  'ovr_number', 'last_name', 'first_name', 'middle_initial', 'license_number', 'address',
+  'ovr_number', 'last_name', 'first_name', 'middle_initial', 'license_number',
+  'scanned_license', 'confiscated_license_draft', 'address',
   'plate_number', 'registration_number', 'vehicle_type', 'vehicle_brand', 'vehicle_model', 'remarks',
 ]
 
@@ -96,14 +98,37 @@ export function mergeOcrIntoForm(form, parsed) {
     }
   }
 
-  return {
+  const scanned = String(parsed.license_number || '').trim()
+  const status = form.license_status || 'not_confiscated'
+  const next = {
     ...form,
     last_name: toTitleCase(last_name || ''),
     first_name: toTitleCase(first_name || ''),
     middle_initial: toTitleCase(middle_initial || ''),
-    license_number: form.license_number || parsed.license_number || '',
     address: form.address || parsed.address || '',
+    // A scan never chooses Confiscated. The enforcer's current choice stays.
+    license_status: status,
   }
+  if (scanned) {
+    next.scanned_license = form.scanned_license || scanned
+    if (status === 'confiscated') {
+      if (!String(form.confiscated_license_draft || '').trim()) {
+        next.confiscated_license_draft = next.scanned_license
+      }
+    } else {
+      next.license_number = next.scanned_license
+    }
+  }
+  return next
+}
+
+/** License number that is actually saved on the violation.
+ *  Not confiscated: only a scanned number. A number typed inside Confiscated
+ *  is submitted only while that choice is still selected. */
+export function driverLicenseForSubmit(form) {
+  if (!form) return ''
+  if (form.license_status === 'confiscated') return String(form.confiscated_license_draft || '').trim()
+  return String(form.scanned_license || '').trim()
 }
 
 /** multipart body for POST /api/violations/create/ (ViolationDetailSerializer). */
@@ -114,8 +139,8 @@ export function buildOvrFormData(form, selectedIds) {
   put('source', 'enforcer_ovr')            // backend forces this for enforcers anyway
   put('ovr_number', form.ovr_number.trim())
   put('violator_name', buildViolatorName(form))
-  put('license_number', form.license_number)
-  put('license_status', form.license_status)
+  put('license_number', driverLicenseForSubmit(form))
+  put('license_status', form.license_status === 'confiscated' ? 'confiscated' : 'not_confiscated')
   put('plate_number', form.plate_number)
   put('registration_number', form.registration_number)
   put('vehicle_type', form.vehicle_type)
@@ -155,7 +180,8 @@ export function buildOfflineRecord(form, selectedIds, localId) {
     violator_name: buildViolatorName(form),
     last_name: form.last_name, first_name: form.first_name, middle_initial: form.middle_initial,
     address: form.address,
-    license_number: form.license_number, license_status: form.license_status,
+    license_number: driverLicenseForSubmit(form),
+    license_status: form.license_status === 'confiscated' ? 'confiscated' : 'not_confiscated',
     plate_number: form.plate_number, registration_number: form.registration_number,
     vehicle_type: form.vehicle_type, vehicle_brand: form.vehicle_brand, vehicle_model: form.vehicle_model,
     vehicle_use: form.vehicle_use,

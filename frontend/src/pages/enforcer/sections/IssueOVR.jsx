@@ -9,7 +9,7 @@ import {
   buildOvrFormData, emptyForm, isFormDirty, manilaNowIso, mergeOcrIntoForm,
 } from './issue-ovr/helpers'
 import { filterTypesByVehicle, pruneSelectedIds } from '../../../utils/violationTypeFilter'
-import { hasPersonalDetails, hasVehicleDetails, splitViolatorName } from '../../../utils/savedViolator'
+import { hasVehicleDetails, splitViolatorName } from '../../../utils/savedViolator'
 import './IssueOVR.css'
 
 /**
@@ -136,17 +136,11 @@ export default function IssueOVR({ onSuccess, setPage }) {
   const [search, setSearch] = useState('')
 
   const [repeatInfo, setRepeatInfo] = useState(null)
-  const [lookupLoading, setLookupLoading] = useState(false)
-  // License lookup bookkeeping: lookupKeyRef = the value last looked up (an
-  // identical repeat — Enter followed by blur, or OCR Apply followed by blur —
-  // is skipped); lookupSeqRef = newest request wins.
-  const lookupKeyRef = useRef('')
-  const lookupSeqRef = useRef(0)
-  const licenseTimerRef = useRef(null)
+  const nameTimerRef = useRef(null)
   const plateTimerRef = useRef(null)
   const [plateLookupLoading, setPlateLookupLoading] = useState(false)
-  const [personalSaved, setPersonalSaved] = useState(null)
   const [vehicleSaved, setVehicleSaved] = useState(null)
+  const [nameSuggestions, setNameSuggestions] = useState([])
   const [gps, setGps] = useState(() => (typeof navigator !== 'undefined' && navigator.geolocation ? 'locating' : 'unavailable'))
 
   /* ── data loading ── */
@@ -217,75 +211,21 @@ export default function IssueOVR({ onSuccess, setPage }) {
     return () => clearInterval(timer)
   }, [])
 
-  const runLicenseLookup = async (value) => {
-    const key = value.toLowerCase()
-    if (key === lookupKeyRef.current) return
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
-    lookupKeyRef.current = key
-    const seq = ++lookupSeqRef.current
-    setLookupLoading(true)
-    try {
-      const res = await api.get(`/api/violations/violator-lookup/?license_number=${encodeURIComponent(value)}`)
-      if (seq !== lookupSeqRef.current) return
-      const data = res.data
-      setPersonalSaved(hasPersonalDetails(data?.personal) ? data.personal : null)
-      setRepeatInfo(data?.violation_count > 0 ? data : null)
-    } catch {
-      if (seq === lookupSeqRef.current) lookupKeyRef.current = ''
-    } finally {
-      if (seq === lookupSeqRef.current) setLookupLoading(false)
-    }
-  }
-
-  const handleLicenseLookup = (licenseNumber) => {
-    clearTimeout(licenseTimerRef.current)
-    const value = (licenseNumber || '').trim()
-    if (!value) {
-      lookupSeqRef.current += 1
-      lookupKeyRef.current = ''
-      setLookupLoading(false)
-      setRepeatInfo(null)
-      setPersonalSaved(null)
-      return
-    }
-    licenseTimerRef.current = setTimeout(() => runLicenseLookup(value), 400)
-  }
-
-  const applyPersonal = () => {
-    if (!personalSaved) return
-    const parts = splitViolatorName(personalSaved.violator_name)
-    setForm(f => ({
-      ...f,
-      ...(parts.last_name ? { last_name: parts.last_name } : {}),
-      ...(parts.first_name ? { first_name: parts.first_name } : {}),
-      ...(parts.middle_initial ? { middle_initial: parts.middle_initial } : {}),
-      ...(personalSaved.address ? { address: personalSaved.address } : {}),
-      ...(personalSaved.license_number ? { license_number: personalSaved.license_number } : {}),
-    }))
-    setPersonalSaved(null)
-  }
-
-  // Apply a scanned license: same fill-blanks-only merge as before, and then
-  // the SAME earlier-violation lookup the License no. field uses on blur —
-  // previously an OCR-filled License no. was only checked if the enforcer
-  // happened to focus and leave the field. License status is never touched.
   const handleApplyOcr = (parsed) => {
     setForm(f => mergeOcrIntoForm(f, parsed))
-    const lic = (form.license_number || parsed?.license_number || '').trim()
-    if (lic) handleLicenseLookup(lic)
   }
 
-  // Online Plate Number lookup (NEW). Reuses the same violator-lookup
-  // endpoint as License Number, queried by plate_number instead. Only
-  // suggests Vehicle Type/Brand/Model into fields that are currently
-  // empty — a value the enforcer already selected/typed is left alone.
+  const plateReady = (value) => (value || '').replace(/\s+/g, '').length >= 3
+
   const runPlateLookup = async (plateNumber) => {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return
     setPlateLookupLoading(true)
     try {
       const res = await api.get(`/api/violations/violator-lookup/?plate_number=${encodeURIComponent(plateNumber)}`)
-      const vehicle = res.data?.vehicle
-      setVehicleSaved(hasVehicleDetails(vehicle) ? vehicle : null)
+      const data = res.data
+      const vehicle = data?.vehicle
+      setVehicleSaved(hasVehicleDetails(vehicle) || vehicle?.violator_name ? vehicle : null)
+      setRepeatInfo(data?.violation_count > 0 ? data : null)
     } catch { /* offline or unavailable — leave the form as typed */ }
     finally { setPlateLookupLoading(false) }
   }
@@ -293,8 +233,40 @@ export default function IssueOVR({ onSuccess, setPage }) {
   const handlePlateLookup = (plateNumber) => {
     clearTimeout(plateTimerRef.current)
     const value = (plateNumber || '').trim()
-    if (!value) { setVehicleSaved(null); return }
+    if (!plateReady(value)) { setVehicleSaved(null); setRepeatInfo(null); return }
     plateTimerRef.current = setTimeout(() => runPlateLookup(value), 400)
+  }
+
+  const fillPerson = (person) => {
+    const parts = splitViolatorName(person?.violator_name)
+    return {
+      ...(parts.last_name ? { last_name: parts.last_name } : {}),
+      ...(parts.first_name ? { first_name: parts.first_name } : {}),
+      ...(parts.middle_initial ? { middle_initial: parts.middle_initial } : {}),
+      ...(person?.address ? { address: person.address } : {}),
+    }
+  }
+
+  const applyName = (person) => {
+    if (!person) return
+    setForm(f => ({ ...f, ...fillPerson(person) }))
+    setNameSuggestions([])
+  }
+
+  const runNameLookup = async (last, first) => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+    try {
+      const params = new URLSearchParams({ last_name: last.trim() })
+      if ((first || '').trim()) params.set('first_name', first.trim())
+      const res = await api.get(`/api/violations/violator-lookup/?${params}`)
+      setNameSuggestions(Array.isArray(res.data?.suggestions) ? res.data.suggestions.slice(0, 5) : [])
+    } catch { setNameSuggestions([]) }
+  }
+
+  const handleNameLookup = (last, first) => {
+    clearTimeout(nameTimerRef.current)
+    if ((last || '').trim().length < 3) { setNameSuggestions([]); return }
+    nameTimerRef.current = setTimeout(() => runNameLookup(last, first), 400)
   }
 
   const applyVehicle = () => {
@@ -308,6 +280,7 @@ export default function IssueOVR({ onSuccess, setPage }) {
       ...(v.vehicle_brand ? { vehicle_brand: v.vehicle_brand } : {}),
       ...(v.vehicle_model ? { vehicle_model: v.vehicle_model } : {}),
       ...(v.vehicle_use ? { vehicle_use: v.vehicle_use } : {}),
+      ...fillPerson(v),
     }))
     setVehicleSaved(null)
   }
@@ -353,8 +326,7 @@ export default function IssueOVR({ onSuccess, setPage }) {
 
   const resetForm = () => {
     setStep(1); setSelectedIds([]); setFlagged({}); setError(''); setOfflineNotice(false); setSearch('')
-    setRepeatInfo(null); setPersonalSaved(null); setVehicleSaved(null); setSubmitted(null)
-    lookupSeqRef.current += 1; lookupKeyRef.current = ''; setLookupLoading(false)
+    setRepeatInfo(null); setNameSuggestions([]); setVehicleSaved(null); setSubmitted(null)
     setForm(emptyForm())
     if (navigator.geolocation) setGps('locating')
     requestPosition()
@@ -478,8 +450,8 @@ export default function IssueOVR({ onSuccess, setPage }) {
         <div className="ovr-main">
           {step === 1 && (
             <StepDriverVehicle form={form} setForm={setForm} errors={errors}
-              repeatInfo={repeatInfo} lookupLoading={lookupLoading} onLookup={handleLicenseLookup}
-              personalSaved={!!personalSaved} onUsePersonal={applyPersonal}
+              repeatInfo={repeatInfo}
+              nameSuggestions={nameSuggestions} onNameLookup={handleNameLookup} onSelectName={applyName}
               plateLookupLoading={plateLookupLoading} vehicleSaved={!!vehicleSaved} onUseVehicle={applyVehicle}
               onPlateLookup={handlePlateLookup}
               onApplyOcr={handleApplyOcr} />

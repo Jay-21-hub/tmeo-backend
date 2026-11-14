@@ -527,9 +527,11 @@ class ViolationDetailSerializer(GpsCoordinateValidationMixin, serializers.ModelS
         status_value = cur('license_status', 'not_confiscated') or 'not_confiscated'
 
         if status_value not in ('confiscated', 'other_documents'):
+            attrs['license_status'] = 'not_confiscated'
             attrs['confiscated_document_type'] = ''
             attrs['confiscated_document_name'] = ''
             attrs['confiscated_document_number'] = ''
+            # license_number is kept: it is the driver's number, not custody.
             return
 
         request = self.context.get('request')
@@ -602,6 +604,9 @@ class ViolationDetailSerializer(GpsCoordinateValidationMixin, serializers.ModelS
         )
         # enforcer is injected by ViolationCreateView.perform_create via serializer.save(enforcer=request.user)
         violation = Violation.objects.create(**validated_data)
+        # A license number, including one filled by a scan, never opens a
+        # custody row. Custody is opened only for an explicit Confiscated
+        # status, and only by the existing custody service — not here.
 
         for type_id in type_ids:
             vtype = ViolationType.objects.get(id=type_id)

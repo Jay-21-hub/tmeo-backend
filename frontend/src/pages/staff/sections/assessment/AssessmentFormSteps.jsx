@@ -3,6 +3,7 @@ import { Search, User, Car, FileWarning, AlertTriangle, ShieldAlert, Eye, Clipbo
 import { toTitleCase } from '../../../../utils/helpers'
 import Button from '../../../../components/ui/Button'
 import PreviousRecordPrompt from '../../../../components/common/PreviousRecordPrompt'
+import NameSuggestions from '../../../../components/common/NameSuggestions'
 import useVehicleCatalog from '../../../../hooks/useVehicleCatalog'
 import EvidencePhoto from '../../../../components/ui/EvidencePhoto'
 import './assessmentFlow.css'
@@ -206,7 +207,7 @@ function RepeatViolatorNotice({ repeatInfo, onViewTicket, viewingId }) {
                          its number ('Others' also needs a name).
    `statusLocked` = Enforcer OVR whose decision is read-only (Staff still
    completes the document details). */
-function ConfiscationSection({ form, errors, onChange, statusLocked, licenseLocked, onLookup, personalSaved, onUsePersonal }) {
+function ConfiscationSection({ form, errors, onChange, statusLocked, licenseLocked }) {
   const status = form.license_status
   const confiscated = status === 'confiscated'
   const otherDocs = status === 'other_documents'
@@ -278,10 +279,8 @@ function ConfiscationSection({ form, errors, onChange, statusLocked, licenseLock
               <input id="license_number" className={`input ${errors.license_number ? 'input-error' : ''}`}
                 placeholder="e.g. N01-23-456789" value={form.license_number} readOnly={licenseLocked}
                 style={licenseLocked ? readOnlyInput : undefined}
-                onChange={e => { onChange('license_number', e.target.value); onLookup?.('license', e.target.value) }}
-                onBlur={() => onLookup?.('license', form.license_number)} />
+                onChange={e => onChange('license_number', e.target.value)} />
             </Field>
-            <div style={{ marginTop: 8 }}><PreviousRecordPrompt visible={personalSaved} onUse={onUsePersonal} /></div>
           </div>
         )}
       </div>
@@ -417,7 +416,7 @@ const VehicleReadout = ({ form }) => (
 const vehicleUseLabel = (v) => (v === 'private' ? 'Private' : v === 'public' ? 'Public' : '')
 
 /* ── STEP 1: Vehicle & Violator Information ── */
-export function AssessmentStep1({ form, errors, lookupLoading, repeatInfo, violationData, onChange, onLookup, personalSaved, vehicleSaved, onUsePersonal, onUseVehicle, onNext, onViewTicket, viewingTicketId }) {
+export function AssessmentStep1({ form, errors, lookupLoading, repeatInfo, violationData, onChange, onPlateLookup, nameSuggestions, onNameLookup, onSelectName, vehicleSaved, onUseVehicle, onNext, onViewTicket, viewingTicketId }) {
   // Existing Enforcer OVR → original field record, locked. Walk-in → editable.
   const locked = !!violationData
   const imported = isImportedRecord(violationData)   // locked, but Brand/Model are editable
@@ -505,12 +504,17 @@ export function AssessmentStep1({ form, errors, lookupLoading, repeatInfo, viola
           <div className="af-grid">
             <div className="af-s4">
               <Field label="Last Name" required error={errors.full_name} htmlFor="full_name">
-                <input id="full_name" className={`input ${errors.full_name ? 'input-error' : ''}`} placeholder="Dela Cruz" value={nameParts.last} onChange={e => updateNamePart('last', e.target.value)} onBlur={e => updateNamePart('last', toTitleCase(e.target.value))} />
+                <input id="full_name" className={`input ${errors.full_name ? 'input-error' : ''}`} placeholder="Dela Cruz" value={nameParts.last}
+                  onChange={e => { updateNamePart('last', e.target.value); onNameLookup?.(e.target.value, nameParts.first) }}
+                  onBlur={e => updateNamePart('last', toTitleCase(e.target.value))} />
               </Field>
+              <NameSuggestions suggestions={nameSuggestions} onSelect={onSelectName} />
             </div>
             <div className="af-s4">
               <Field label="First Name" htmlFor="first_name">
-                <input id="first_name" className="input" placeholder="Juan" value={nameParts.first} onChange={e => updateNamePart('first', e.target.value)} onBlur={e => updateNamePart('first', toTitleCase(e.target.value))} />
+                <input id="first_name" className="input" placeholder="Juan" value={nameParts.first}
+                  onChange={e => { updateNamePart('first', e.target.value); onNameLookup?.(nameParts.last, e.target.value) }}
+                  onBlur={e => updateNamePart('first', toTitleCase(e.target.value))} />
               </Field>
             </div>
             <div className="af-s4">
@@ -518,16 +522,6 @@ export function AssessmentStep1({ form, errors, lookupLoading, repeatInfo, viola
                 <input id="middle_initial" className="input" placeholder="R." value={nameParts.mi} onChange={e => updateNamePart('mi', e.target.value)} onBlur={e => updateNamePart('mi', toTitleCase(e.target.value))} />
               </Field>
             </div>
-            {form.license_status !== 'confiscated' && (
-              <div className="af-s6">
-                <Field label="Driver's License Number" htmlFor="license_lookup" helper={lookupLoading ? 'Searching...' : 'A matching license can offer this driver’s saved details.'}>
-                  <input id="license_lookup" className="input" placeholder="e.g. N01-23-456789" value={form.license_number}
-                    onChange={e => { onChange('license_number', e.target.value); onLookup('license', e.target.value) }}
-                    onBlur={() => onLookup('license', form.license_number)} />
-                </Field>
-                <div style={{ marginTop: 8 }}><PreviousRecordPrompt visible={personalSaved} onUse={onUsePersonal} /></div>
-              </div>
-            )}
             <div className="af-s6">
               <Field label="Address" required error={errors.address} htmlFor="address">
                 <input id="address" className={`input ${errors.address ? 'input-error' : ''}`} placeholder="Complete Address" value={form.address} onChange={e => onChange('address', e.target.value)} onBlur={() => onChange('address', toTitleCase(form.address))} />
@@ -561,13 +555,13 @@ export function AssessmentStep1({ form, errors, lookupLoading, repeatInfo, viola
               <LockedField id="plate_number" label="Plate Number" value={form.plate_number} />
             ) : (
               <Field label="Plate Number" required error={errors.plate_number} htmlFor="plate_number"
-                helper={lookupLoading ? 'Searching...' : 'A matching plate can offer this vehicle’s saved details.'}>
+                helper={lookupLoading ? 'Searching...' : 'A matching plate can offer this vehicle and its last recorded driver.'}>
                 <div style={{ position: 'relative' }}>
                   <input id="plate_number" className={`input ${errors.plate_number ? 'input-error' : ''}`}
                     placeholder="e.g. ABC 1234" value={form.plate_number}
-                    onChange={e => { onChange('plate_number', e.target.value); onLookup('vehicle', e.target.value) }}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onLookup('vehicle', form.plate_number) } }}
-                    onBlur={() => onLookup('vehicle', form.plate_number)} />
+                    onChange={e => { onChange('plate_number', e.target.value); onPlateLookup?.(e.target.value) }}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onPlateLookup?.(form.plate_number) } }}
+                    onBlur={() => onPlateLookup?.(form.plate_number)} />
                   {lookupLoading && <span className="spinner" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14 }} />}
                 </div>
               </Field>
@@ -585,8 +579,6 @@ export function AssessmentStep1({ form, errors, lookupLoading, repeatInfo, viola
       <ConfiscationSection
         form={form} errors={errors} onChange={onChange}
         statusLocked={locked} licenseLocked={!!violationData?.license_number}
-        onLookup={locked ? undefined : onLookup}
-        personalSaved={personalSaved} onUsePersonal={onUsePersonal}
       />
 
       {violationData?.image && (
