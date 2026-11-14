@@ -29,6 +29,9 @@ export const API = {
   EVIDENCE_ASSOCIATE:  (evidenceId) => `/api/violations/evidence/${evidenceId}/`,
   MARK_TICKET_PRINTED: (id) => `/api/violations/tickets/${id}/mark-printed/`,
   CONFIRM_PAYMENT:     (id) => `/api/violations/${id}/confirm-payment/`,
+  // Treasury Personnel ("Received by" pick-list). Admin manages; Staff reads active only.
+  TREASURY_PERSONNEL:        '/api/violations/treasury-personnel/',
+  TREASURY_PERSONNEL_DETAIL: (id) => `/api/violations/treasury-personnel/${id}/`,
   // Confiscated Licenses (custody) — Admin + Staff only (Stage B backend).
   // `key` is the backend record key: "v<id>" (active) or "a<id>" (archived).
   CUSTODY_LIST:        '/api/violations/confiscated-licenses/',

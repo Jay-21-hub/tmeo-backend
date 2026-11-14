@@ -19,6 +19,7 @@ import AddUserModal from './users/AddUserModal'
 import { UserConfirmDialog, UserDeleteAccountModal } from './users/UserConfirmModals'
 import UserActionsMenu from './users/UserActionsMenu'
 import ChangeRoleModal from './users/ChangeRoleModal'
+import TreasuryPersonnelModal from './users/TreasuryPersonnelModal'
 import './UserManagement.css'
 
 const PAGE_SIZE = 10
@@ -47,6 +48,7 @@ export default function UserManagement() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [showAdd, setShowAdd] = useState(false)
+  const [showTreasury, setShowTreasury] = useState(false)
   const [viewUser, setViewUser] = useState(null)
   const [editUser, setEditUser] = useState(null)
   const [confirm, setConfirm] = useState(null)
@@ -146,6 +148,7 @@ export default function UserManagement() {
         />
       )}
 
+      {showTreasury && <TreasuryPersonnelModal onClose={() => setShowTreasury(false)} />}
       {showAdd && <AddUserModal onClose={() => setShowAdd(false)} onSuccess={(msg) => { toast.success(msg); fetchUsers() }} />}
       {editUser && (
         <AddUserModal
@@ -194,7 +197,8 @@ export default function UserManagement() {
           <option value="staff">Assessment Staff</option>
           <option value="enforcer">Traffic Enforcer</option>
         </select>
-        <Button variant="primary" icon={Plus} onClick={() => setShowAdd(true)} style={{ marginLeft: 'auto' }}>Add User</Button>
+        <Button variant="secondary" onClick={() => setShowTreasury(true)} style={{ marginLeft: 'auto' }}>Treasury Personnel</Button>
+        <Button variant="primary" icon={Plus} onClick={() => setShowAdd(true)}>Add User</Button>
       </div>
 
       <div className="card">

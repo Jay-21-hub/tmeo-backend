@@ -31,3 +31,21 @@ describe('buildReceiptTicket — assessor identity', () => {
     expect([t.full_name, t.or_number, t.amount_paid, t.received_by]).toEqual(['JUAN', 'OR-1', 500, ''])
   })
 })
+
+// Received by = the Treasury Personnel recorded at Confirm Payment (event-time
+// name). It is never taken from the assessor, the live account or free text.
+describe('buildReceiptTicket — received by', () => {
+  it('prints the recorded Treasury Personnel name', () => {
+    const t = buildReceiptTicket({ assessment: { received_by: 'Maria Cruz', assessed_by_name: 'Staff Person' } })
+    expect(t.received_by).toBe('Maria Cruz')
+  })
+
+  it('stays blank when nobody was chosen (never falls back to assessor/staff)', () => {
+    const t = buildReceiptTicket({
+      assessed_by: { full_name: 'Live Staff' },
+      assessment: { received_by: '', assessed_by_name: 'Staff Person' },
+    })
+    expect(t.received_by).toBe('')
+    expect(buildReceiptTicket({}).received_by).toBe('')
+  })
+})

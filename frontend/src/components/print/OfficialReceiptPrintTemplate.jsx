@@ -35,7 +35,8 @@ import {
  * blocks stack under the main fields so long text gets full line width. The on-screen preview and the print
  * target render the same <PrintSheet>, so they cannot drift apart.
  *
- * APPROVED WORKFLOW: "Received by" always prints blank (the Staff account
+ * APPROVED WORKFLOW: "Received by" prints ONLY the Treasury Personnel chosen at
+ * Confirm Payment, and is blank when none was chosen (the Staff/Admin account
  * name is never printed there). "O.R. No." always renders; it prints the
  * stored value and is blank when there is none.
  *
@@ -219,17 +220,18 @@ export default function OfficialReceiptPrintTemplate({ ticket, formatCurrency, o
   const amountPaid = t.amount_paid != null ? (formatCurrency ? formatCurrency(t.amount_paid) : t.amount_paid) : ''
 
   // Normalized once, shared by BOTH copies and by preview + print target.
-  // Received by is deliberately always blank (approved workflow).
+  // Received by prints the Treasury Personnel recorded at Confirm Payment;
+  // blank when none was chosen. Never the Staff/Admin/assessor.
   const data = useMemo(() => ({
     violatorName, address, placeOfViolation, violationsText, timeStr,
     dateIssuedStr, penaltyAmount: String(penaltyAmount ?? ''), amountPaid: String(amountPaid ?? ''),
     orNumber: t.or_number || '',
     datePaidStr: formatDateStr(t.date_paid),
-    receivedBy: '',
+    receivedBy: t.received_by || '',
     assessedBy: t.assessed_by || t.assessed_by_name || '',
     vehicleType: t.vehicle_type || '',
   }), [violatorName, address, placeOfViolation, violationsText, timeStr, dateIssuedStr,
-    penaltyAmount, amountPaid, t.or_number, t.date_paid, t.assessed_by, t.assessed_by_name, t.vehicle_type])
+    penaltyAmount, amountPaid, t.or_number, t.date_paid, t.received_by, t.assessed_by, t.assessed_by_name, t.vehicle_type])
 
   const dataKey = JSON.stringify(data)
 

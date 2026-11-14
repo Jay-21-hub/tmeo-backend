@@ -128,6 +128,7 @@ const DetailPanel = ({ record, onClose, onSelect }) => {
     // Issued, which is when the Enforcer originally wrote the OVR. Only
     // shown once a payment has actually been recorded.
     ...(record.status === 'paid' ? [['Date Paid', fmtDate(record.date_paid)]] : []),
+    ...(record.status === 'paid' ? [['Received By', record.received_by ? (record.received_by_position ? `${record.received_by} — ${record.received_by_position}` : record.received_by) : '—']] : []),
     ['Location', record.location],
     ['Enforcer', enforcerName],
     ['Penalty Amount', fmtPeso(record.penalty_amount ?? record.fine_amount)],

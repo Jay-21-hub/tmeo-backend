@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from .models import (
     Violation, ViolationType, ViolationItem, VehicleBrandModel,
-    Assessment, ViolationEvidence,
+    Assessment, ViolationEvidence, TreasuryPersonnel,
 )
 from .serializers import (
     ViolationListSerializer,
@@ -26,6 +26,7 @@ from .serializers import (
     AssessmentSerializer,
     AssessmentRecordSerializer,
     ViolationEvidenceSerializer,
+    TreasuryPersonnelSerializer,
     EvidenceAssociateSerializer,
     PublicViolationSerializer,
     _items_with_types,
@@ -1497,8 +1498,9 @@ class ConfirmPaymentView(APIView):
 
     Body: { "or_number": "<optional>" } — nothing else is read. Amount Paid,
     Date Paid, Assessed By and the penalty are all derived on the server;
-    Received By is never set here (Treasury fills it by hand on the printed
-    form). Everything happens in ONE transaction, so a failure anywhere
+    Received By is set ONLY from an active Treasury Personnel pick-list entry
+    (`received_by_personnel` id); never from free text or the caller. If none
+    is chosen it stays blank (Treasury signs by hand on the printed form). Everything happens in ONE transaction, so a failure anywhere
     leaves the violation exactly as it was (still processing, no partial
     Assessment/payment data). Printing is a separate action.
     """
@@ -1513,6 +1515,22 @@ class ConfirmPaymentView(APIView):
         or_number = or_number.strip()
         if len(or_number) > 50:
             return Response({'or_number': 'O.R. Number may not exceed 50 characters.'}, status=400)
+
+        # "Received by": optional, and ONLY a Treasury Personnel pick-list id.
+        # Free-text names (received_by) and the caller's own identity are never
+        # used. Absent/blank = nobody chosen (printed blank for hand signature).
+        personnel = None
+        raw_personnel = request.data.get('received_by_personnel')
+        if raw_personnel not in (None, ''):
+            try:
+                personnel = TreasuryPersonnel.objects.get(pk=int(raw_personnel))
+            except (TypeError, ValueError, TreasuryPersonnel.DoesNotExist):
+                return Response({'received_by_personnel': 'Choose a valid Treasury Personnel.'}, status=400)
+            if not personnel.is_active:
+                return Response(
+                    {'received_by_personnel': 'This Treasury Personnel is inactive and cannot be chosen.'},
+                    status=400,
+                )
 
         with transaction.atomic():
             try:
@@ -1549,7 +1567,11 @@ class ConfirmPaymentView(APIView):
             assessment.amount_paid  = amount
             assessment.date_paid    = paid_on
             assessment.or_number    = or_number      # optional; blank stays blank
-            assessment.received_by  = ''             # Treasury signs by hand
+            # Event-time snapshot of the chosen Treasury Personnel (name/position
+            # survive a later rename, deactivation or role change).
+            assessment.received_by_personnel = personnel
+            assessment.received_by           = personnel.full_name if personnel else ''
+            assessment.received_by_position  = personnel.position if personnel else ''
             # PAYMENT CONFIRMER — a different actor from the assessor. This
             # view NEVER writes assessed_by / assessed_at / assessor_* on
             # Assessment or Violation: the assessor was established by
@@ -1594,6 +1616,8 @@ class ConfirmPaymentView(APIView):
                     'assessed_by':  request.user.full_name,
                     'payment_confirmed_by': request.user.full_name,
                     'role':         request.user.role,
+                    **({'received_by_name': personnel.full_name,
+                        'received_by_personnel_id': personnel.id} if personnel else {}),
                 },
             )
 
@@ -1663,6 +1687,7 @@ class AssessmentDetailView(APIView):
         return Response(AssessmentRecordSerializer(assessment).data)
 
     PAYMENT_FIELDS = ('or_number', 'penalty', 'amount_paid', 'received_by',
+                      'received_by_position', 'received_by_personnel',
                       'date_paid', 'assessed_by', 'assessed_at',
                       'payment_confirmed_by', 'payment_confirmed_at')
 
@@ -1684,6 +1709,80 @@ class AssessmentDetailView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+
+# ─── Treasury Personnel ("Received by" pick-list) ─────────────────────────
+
+class TreasuryPersonnelListCreateView(generics.ListCreateAPIView):
+    """
+    GET  /violations/treasury-personnel/  — Admin: everyone (?active=1 for
+         active only). Staff: ACTIVE only (read-only, for the Confirm Payment
+         dropdown). Enforcers: no access.
+    POST /violations/treasury-personnel/  — Admin only.
+    """
+    serializer_class = TreasuryPersonnelSerializer
+    pagination_class = None
+
+    def get_permissions(self):
+        from accounts.permissions import IsAdminOrStaff
+        if self.request.method == 'POST':
+            return [IsAdmin()]
+        return [IsAdminOrStaff()]
+
+    def get_queryset(self):
+        qs = TreasuryPersonnel.objects.all()
+        if self.request.user.role != 'admin' or self.request.query_params.get('active') == '1':
+            qs = qs.filter(is_active=True)
+        return qs
+
+    def perform_create(self, serializer):
+        instance = serializer.save(created_by=self.request.user)
+        log_action(
+            user=self.request.user, action='CREATE', module='Treasury Personnel',
+            description=f'{self.request.user.full_name} added Treasury Personnel: {instance.full_name}',
+            request=self.request, target_type='TreasuryPersonnel', target_id=instance.id,
+            changes=build_changes({}, snapshot(instance, ('full_name', 'position', 'is_active'))),
+        )
+
+
+class TreasuryPersonnelDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Admin only. Editable: full_name, position, is_active. Renaming or
+    deactivating never rewrites old assessments (they keep a name snapshot).
+    DELETE is refused (409) once the person was ever recorded as Received by —
+    deactivate instead.
+    """
+    serializer_class = TreasuryPersonnelSerializer
+    permission_classes = [IsAdmin]
+    queryset = TreasuryPersonnel.objects.all()
+    http_method_names = ['get', 'patch', 'delete', 'head', 'options']
+
+    def perform_update(self, serializer):
+        audited = ('full_name', 'position', 'is_active')
+        before = snapshot(serializer.instance, audited)
+        instance = serializer.save()
+        log_action(
+            user=self.request.user, action='UPDATE', module='Treasury Personnel',
+            description=f'{self.request.user.full_name} updated Treasury Personnel: {instance.full_name}',
+            request=self.request, target_type='TreasuryPersonnel', target_id=instance.id,
+            changes=build_changes(before, snapshot(instance, audited)),
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.assessments_received.exists():
+            return Response(
+                {'error': 'This person is already recorded on payments. Deactivate instead of deleting.'},
+                status=409,
+            )
+        name, target_id = instance.full_name, instance.id
+        instance.delete()
+        log_action(
+            user=request.user, action='DELETE', module='Treasury Personnel',
+            description=f'{request.user.full_name} deleted Treasury Personnel: {name}',
+            request=request, target_type='TreasuryPersonnel', target_id=target_id,
+        )
+        return Response(status=204)
 
 
 # ─── Evidence (camera capture — separate feature, linked to an OVR) ────────

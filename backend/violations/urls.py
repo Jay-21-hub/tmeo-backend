@@ -12,6 +12,7 @@ from .views import (
     YearComparisonView, ImportViolationsView, ImportTemplateView,
     MarkTicketPrintedView, ScanLicenseView, ViolatorLookupView,
     ViolatorHistoryFullView, RelatedActiveViolationsView,
+    TreasuryPersonnelListCreateView, TreasuryPersonnelDetailView,
 )
 from .views_sse import ViolationSSEView
 from .custody_views import (
@@ -22,6 +23,8 @@ from .custody_views import (
 urlpatterns = [
     path('types/',                         ViolationTypeListView.as_view(),    name='violation-types'),
     path('types/<int:pk>/',                ViolationTypeDetailView.as_view(),  name='violation-type-detail'),
+    path('treasury-personnel/',            TreasuryPersonnelListCreateView.as_view(), name='treasury-personnel'),
+    path('treasury-personnel/<int:pk>/',   TreasuryPersonnelDetailView.as_view(),     name='treasury-personnel-detail'),
     path('vehicle-brands/',                VehicleBrandModelListView.as_view(),   name='vehicle-brands'),
     path('vehicle-brands/<int:pk>/',       VehicleBrandModelDetailView.as_view(), name='vehicle-brand-detail'),
     path('create/',                        ViolationCreateView.as_view(),      name='violation-create'),

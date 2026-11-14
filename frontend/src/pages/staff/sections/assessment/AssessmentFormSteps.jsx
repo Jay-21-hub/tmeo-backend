@@ -746,7 +746,7 @@ export function AssessmentStep3({ form, errors, violationData, totalPenalty, for
           </div>
         </div>
         <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--slate-500)' }}>
-          “Received by” is not filled in here — Treasury completes it by hand on the printed Assessment Form.
+          “Received by” is chosen in Step 4 from the Treasury Personnel list (or left blank for Treasury to sign by hand).
         </p>
       </div>
 
@@ -773,7 +773,7 @@ const Row = ({ label, children }) => (
 )
 
 /* ── STEP 4: Review (read-only; reads the SAME form state that is submitted) ── */
-export function AssessmentStep4({ form, violationData, selectedTypes, totalPenalty, formatCurrency, onBack, onConfirmPayment, loading, paid, onEditStep }) {
+export function AssessmentStep4({ form, violationData, selectedTypes, totalPenalty, formatCurrency, onBack, onConfirmPayment, loading, paid, onEditStep, treasuryList = [], receivedById = '', onReceivedByChange, receivedByRecorded = '' }) {
   const status = form.license_status
   const imported = isImportedRecord(violationData)
   const docType = CONFISCATED_DOCUMENT_OPTIONS.find(o => o.value === form.confiscated_document_type)
@@ -830,7 +830,22 @@ export function AssessmentStep4({ form, violationData, selectedTypes, totalPenal
               <Row label="Date Paid">Recorded automatically on confirmation</Row>
               <Row label="O.R. Number">{form.or_number.trim() || 'Not entered (optional)'}</Row>
               <Row label="Assessed By">{form.assessed_by}</Row>
-              <Row label="Received By">Left blank — Treasury signs by hand</Row>
+              <Row label="Received By">
+                {paid ? (receivedByRecorded || 'Left blank — Treasury signs by hand') : (
+                  <select
+                    className="select"
+                    aria-label="Received by (Treasury Personnel)"
+                    value={receivedById}
+                    onChange={e => onReceivedByChange?.(e.target.value)}
+                    disabled={!!loading}
+                  >
+                    <option value="">Leave blank — Treasury signs by hand</option>
+                    {treasuryList.map(p => (
+                      <option key={p.id} value={p.id}>{p.position ? `${p.full_name} — ${p.position}` : p.full_name}</option>
+                    ))}
+                  </select>
+                )}
+              </Row>
             </ReviewBlock>
           </div>
         </div>

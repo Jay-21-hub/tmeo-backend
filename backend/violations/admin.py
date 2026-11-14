@@ -2,6 +2,7 @@ from django.contrib import admin
 from .models import (
     ViolationType, Violation, ViolationItem, VehicleBrandModel,
     Assessment, ViolationEvidence, LicenseCustody, LicenseCustodyEvent,
+    TreasuryPersonnel,
 )
 from .custody_models import CONFISCATION_FIELDS
 
@@ -74,3 +75,9 @@ class LicenseCustodyAdmin(_ReadOnlyAdmin):
 class LicenseCustodyEventAdmin(_ReadOnlyAdmin):
     list_display = ['id', 'custody', 'event_type', 'actor_name_snapshot', 'created_at']
     list_filter = ['event_type']
+
+@admin.register(TreasuryPersonnel)
+class TreasuryPersonnelAdmin(admin.ModelAdmin):
+    list_display  = ['id', 'full_name', 'position', 'is_active']
+    list_filter   = ['is_active']
+    search_fields = ['full_name', 'position']

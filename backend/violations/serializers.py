@@ -9,7 +9,7 @@ from .custody_models import (
 )
 from .models import (
     Violation, ViolationType, ViolationItem, VehicleBrandModel,
-    Assessment, ViolationEvidence,
+    Assessment, ViolationEvidence, TreasuryPersonnel,
 )
 from accounts.serializers import UserSerializer
 from accounts.identity import (
@@ -152,7 +152,8 @@ class AssessmentRecordSerializer(serializers.ModelSerializer):
         model = Assessment
         fields = [
             'id', 'violation', 'or_number', 'penalty', 'amount_paid',
-            'received_by', 'date_paid', 'assessed_by', 'assessed_by_name',
+            'received_by', 'received_by_position', 'received_by_personnel',
+            'date_paid', 'assessed_by', 'assessed_by_name',
             'assessor_historical',
             'assessed_at', 'payment_confirmed_by', 'payment_confirmed_by_name',
             'payment_confirmer_historical',
@@ -164,7 +165,8 @@ class AssessmentRecordSerializer(serializers.ModelSerializer):
         # or rewrite a payment.
         read_only_fields = [
             'id', 'violation', 'or_number', 'penalty', 'amount_paid',
-            'received_by', 'date_paid', 'assessed_by', 'assessed_by_name',
+            'received_by', 'received_by_position', 'received_by_personnel',
+            'date_paid', 'assessed_by', 'assessed_by_name',
             'assessor_historical',
             'assessed_at', 'payment_confirmed_by', 'payment_confirmed_by_name',
             'payment_confirmer_historical',
@@ -266,6 +268,18 @@ class ViolationListSerializer(serializers.ModelSerializer):
     # recorded a payment via ConfirmPaymentView.
     date_paid        = serializers.SerializerMethodField()
     or_number        = serializers.SerializerMethodField()
+    # Treasury "Received by" (event-time name snapshot) — blank until Confirm
+    # Payment records a chosen Treasury Personnel.
+    received_by          = serializers.SerializerMethodField()
+    received_by_position = serializers.SerializerMethodField()
+
+    def get_received_by(self, obj):
+        record = getattr(obj, 'assessment', None)
+        return record.received_by if record else None
+
+    def get_received_by_position(self, obj):
+        record = getattr(obj, 'assessment', None)
+        return record.received_by_position if record else None
 
     def get_has_assessment(self, obj):
         return hasattr(obj, 'assessment')
@@ -336,7 +350,8 @@ class ViolationListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'source', 'violator_name', 'license_number', 'plate_number',
             'vehicle_type', 'vehicle_use', 'location', 'latitude', 'longitude',
-            'date_issued', 'date_paid', 'or_number', 'penalty_amount',
+            'date_issued', 'date_paid', 'or_number', 'received_by',
+            'received_by_position', 'penalty_amount',
             'status', 'enforcer_name', 'enforcer_historical',
             'assessed_by_name', 'assessed_by_historical',
             'item_count', 'violation_types', 'created_at',
@@ -731,3 +746,25 @@ class PublicViolationSerializer(serializers.ModelSerializer):
         model = ViolationItem
         fields = ['name', 'category', 'description', 'fine']
         read_only_fields = fields
+
+class TreasuryPersonnelSerializer(serializers.ModelSerializer):
+    """Admin-managed pick-list of people who may be recorded as "Received by"."""
+
+    class Meta:
+        model = TreasuryPersonnel
+        fields = ['id', 'full_name', 'position', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate_full_name(self, value):
+        value = ' '.join((value or '').split())
+        if not value:
+            raise serializers.ValidationError('Name is required.')
+        clash = TreasuryPersonnel.objects.filter(full_name__iexact=value)
+        if self.instance is not None:
+            clash = clash.exclude(pk=self.instance.pk)
+        if clash.exists():
+            raise serializers.ValidationError('A Treasury Personnel with this name already exists.')
+        return value
+
+    def validate_position(self, value):
+        return ' '.join((value or '').split())

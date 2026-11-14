@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models.functions import Lower
 from accounts.models import CustomUser
 from accounts.identity import SnapshotSource
 
@@ -294,6 +295,38 @@ class VehicleBrandModel(models.Model):
         return f"{self.brand} {self.model}"
 
 
+class TreasuryPersonnel(models.Model):
+    """
+    A Treasury / authorized person who may be recorded as "Received by" on an
+    Assessment Form. Managed by Admin only (User Management → Treasury
+    Personnel). They are NOT system users and never log in: this is a plain
+    pick-list so Staff cannot type free-text names or pick themselves.
+
+    Never hard-deleted once used: Assessment.received_by_personnel is PROTECT,
+    and Assessment also keeps a name/position snapshot, so renaming or
+    deactivating a person never rewrites an old record.
+    """
+    full_name  = models.CharField(max_length=150)
+    position   = models.CharField(max_length=100, blank=True)
+    is_active  = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='+'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['full_name']
+        constraints = [
+            models.UniqueConstraint(
+                Lower('full_name'), name='uniq_treasury_personnel_name_ci'
+            ),
+        ]
+
+    def __str__(self):
+        return self.full_name
+
+
 class Assessment(models.Model):
     """
     STAFF-SIDE record — kept deliberately SEPARATE from Violation/OVR.
@@ -329,7 +362,20 @@ class Assessment(models.Model):
 
     penalty      = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     amount_paid  = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    # "Received by" (Treasurer / authorized personnel). `received_by` is the
+    # event-time NAME snapshot (kept as a plain text column so archives,
+    # exports and receipts keep working unchanged); the FK says which pick-list
+    # entry it came from. Both are written ONLY by Confirm Payment, and ONLY
+    # from an active TreasuryPersonnel the caller chose. Blank = nobody chosen
+    # (printed blank for a hand signature). Never the assessor / Staff / Admin.
     received_by  = models.CharField(max_length=150, blank=True)
+    # db_default keeps the column insertable by OLD code that does not know it
+    # (safe to migrate before the new code is deployed).
+    received_by_position = models.CharField(max_length=100, blank=True, db_default='')
+    received_by_personnel = models.ForeignKey(
+        'TreasuryPersonnel', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='assessments_received',
+    )
     date_paid    = models.DateField(null=True, blank=True)
 
     assessed_by  = models.ForeignKey(

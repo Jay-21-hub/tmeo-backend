@@ -37,8 +37,9 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
     confiscated_document_type: '', confiscated_document_name: '', confiscated_document_number: '',
     ovr_number: '',
     date: formatDate(), time: formatTime(),
-    // or_number is OPTIONAL. Date Paid and Received By are not form fields:
-    // the server stamps the payment date and Received By stays blank.
+    // or_number is OPTIONAL. Date Paid is not a form field (the server stamps
+    // it). Received By is chosen from the Treasury Personnel list in Step 4,
+    // or left blank for Treasury to sign by hand.
     // assessed_by is display-only (the server records the real user).
     place_of_violation: '', or_number: '',
     assessed_by: currentUser, violation_id: '',
@@ -64,6 +65,16 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
   const [paidRecord, setPaidRecord] = useState(null)
   // Direct native print job (replaces the custom print-preview modal).
   const [printJob, setPrintJob] = useState(null)
+  // "Received by": optional pick from the Admin-managed Treasury Personnel list
+  // (active only for Staff). Never free text, never the logged-in user.
+  const [treasuryList, setTreasuryList] = useState([])
+  const [receivedById, setReceivedById] = useState('')
+
+  useEffect(() => {
+    api.get(API.TREASURY_PERSONNEL)
+      .then(r => setTreasuryList(Array.isArray(r.data) ? r.data : r.data.results || []))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     api.get('/api/violations/types/')
@@ -529,7 +540,10 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
         else await persistConfiscationDetails(targetId)
         await api.patch(`/api/violations/${targetId}/assess/`, buildAssessPayload('processing'))
       }
-      const paidRes = await api.post(API.CONFIRM_PAYMENT(targetId), { or_number: form.or_number.trim() })
+      const paidRes = await api.post(API.CONFIRM_PAYMENT(targetId), {
+        or_number: form.or_number.trim(),
+        ...(receivedById ? { received_by_personnel: Number(receivedById) } : {}),
+      })
       setPaidRecord(paidRes.data || {})
       setConfirmModal(null)
       toast.success('Payment confirmed. The violation is now Paid.')
@@ -615,6 +629,8 @@ export default function AssessmentForm({ violationData = null, onSuccess }) {
           totalPenalty={totalPenalty} formatCurrency={formatCurrency}
           onBack={() => goToStep(3)} onEditStep={goToStep}
           onConfirmPayment={handleConfirmPayment} loading={loading} paid={!!paidRecord}
+          treasuryList={treasuryList} receivedById={receivedById} onReceivedByChange={setReceivedById}
+          receivedByRecorded={paidRecord?.assessment?.received_by || ''}
         />
       )}
 
