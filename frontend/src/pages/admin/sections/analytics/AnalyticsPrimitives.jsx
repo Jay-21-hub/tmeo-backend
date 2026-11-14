@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { Component, useState, useEffect, useRef } from 'react'
 import { ChevronRight, X, Info } from 'lucide-react'
 import { FILTER_LABELS } from './analyticsConfig'
 
@@ -111,6 +111,34 @@ export function FilterChips({ chips, onRemove, onClearAll }) {
       <button type="button" className="link-chip" onClick={onClearAll}>Clear all</button>
     </div>
   )
+}
+
+/* One chart failing must not blank the rest of the page. The error stays in the console. */
+export class ChartErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { failed: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  componentDidCatch(error, info) {
+    console.error(error)
+    console.error(info?.componentStack || info)
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div role="alert" className="text-caption" style={{ padding: '24px 8px', textAlign: 'center' }}>
+          This chart could not be loaded
+        </div>
+      )
+    }
+    return this.props.children
+  }
 }
 
 /* ─── Small explanatory note (scope, exclusions, basis) ─── */

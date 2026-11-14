@@ -23,11 +23,11 @@ import PeriodFilter from '../../../components/dashboard/PeriodFilter'
 import PeriodEmpty from '../../../components/dashboard/PeriodEmpty'
 import { periodParams } from '../../../components/dashboard/periodRange'
 import {
-  ChartTooltip, EmptyChart, ViewAllButton, Clickable, FilterChips, ChartNote,
+  ChartTooltip, EmptyChart, ViewAllButton, Clickable, FilterChips, ChartNote, ChartErrorBoundary,
 } from './analytics/AnalyticsPrimitives'
-import { rowFromChartEvent, useElementWidth } from './analytics/analyticsUtils'
+import { rowFromChartEvent, useElementWidth, mixColorMap, stackedMix } from './analytics/analyticsUtils'
 import {
-  TrendChart, DonutChart, RankedBarChart, CrosstabMatrix, PeakHoursChart, WeekdayChart,
+  TrendChart, DonutChart, RankedBarChart, StackedMixChart, PeakHoursChart, WeekdayChart,
   BusiestSlotsChart, AgingChart, PaymentDurationChart, RepeatDistributionChart,
 } from './analytics/AnalyticsCharts'
 import { DetailModal, ListModal, YearFilterModal } from './analytics/AnalyticsModals'
@@ -294,6 +294,7 @@ export default function Analytics({ scrollTo }) {
   const peakHours = data?.peak_hours || []
   const byWeekday = data?.by_weekday || []
   const heatmap = data?.day_hour_heatmap || null
+  const mixColors = mixColorMap([stackedMix(data?.vehicle_by_type), stackedMix(data?.hotspot_by_type)])
   const hasTimeData = peakHours.some(h => h.count > 0)
   const vehicleBreakdown = data?.vehicle_type_breakdown || null
   const vehicleRows = (vehicleBreakdown?.items || []).map(v => ({ name: v.vehicle_type, count: v.count, share: v.share }))
@@ -328,22 +329,6 @@ export default function Analytics({ scrollTo }) {
         { label: entry.range ? 'Range' : 'Date', value: entry.range || entry.date, highlight: true },
         ...(entry.day ? [{ label: 'Day', value: entry.day }] : []),
         { label: 'Violations Filed', value: entry.count.toLocaleString(), highlight: true },
-        { divider: true },
-        { label: 'Period', value: periodLabel },
-      ],
-    })
-  }
-
-  const openCollectionModal = (row) => {
-    if (!row) return
-    const value = row.isCount ? row.value.toLocaleString() : peso(row.value)
-    setModal({
-      title: row.label, subtitle: 'Collection Summary Detail',
-      color: row.color, icon: TrendingUp,
-      badge: row.isCount ? `${value} records` : value,
-      rows: [
-        { label: 'Category', value: row.label, highlight: true },
-        { label: 'Value', value, highlight: true },
         { divider: true },
         { label: 'Period', value: periodLabel },
       ],
@@ -683,7 +668,7 @@ export default function Analytics({ scrollTo }) {
             />
             {trendDisplay.length >= 2 ? (
               <>
-                <TrendChart data={trendDisplay} onSelect={openTrendModal} />
+                <ChartErrorBoundary><TrendChart data={trendDisplay} onSelect={openTrendModal} /></ChartErrorBoundary>
                 {groupedByMonth && <ChartNote>This range is grouped by month, the same rule as the dashboard trend.</ChartNote>}
                 {!groupedByMonth && trendView !== 'daily' && <ChartNote>Weekly weeks start on Monday; the first and last groups can be partial.</ChartNote>}
               </>
@@ -696,6 +681,7 @@ export default function Analytics({ scrollTo }) {
             <CardHeader title="Violations by Status" subtitle="Select a status to filter the dashboard" />
             {statusTotal > 0 ? (
               <>
+                <ChartErrorBoundary>
                 <DonutChart
                   data={byStatus} colorFor={(d, i) => STATUS_COLORS[d.status] || CHART_PALETTE[i]}
                   isActive={(d) => d.status === filters.status}
@@ -703,6 +689,7 @@ export default function Analytics({ scrollTo }) {
                   centerLabel={selectedStatus ? `${selectedStatus.label} of ${statusTotal.toLocaleString()}` : 'violations'}
                   onSelect={(d) => d && toggleFilter('status', d.status, d.label)}
                 />
+                </ChartErrorBoundary>
                 <div role="group" aria-label="Violations by status" style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
                   {byStatus.map((s, i) => {
                     const selected = filters.status === s.status
@@ -738,12 +725,14 @@ export default function Analytics({ scrollTo }) {
             <CardHeader title="Violation Types" subtitle="Counts violation items, not tickets. Select a bar to filter the page." />
             {byType.length > 0 ? (
               <>
+                <ChartErrorBoundary>
                 <RankedBarChart
                   data={byType.slice(0, 8)} nameWidth={170}
                   isActive={(r) => !!r.violation_type__code && r.violation_type__code === filters.violation_type}
                   onSelect={(r) => r?.violation_type__code && toggleFilter('violation_type', r.violation_type__code, r.label)}
                   extra={(r) => [`Share of all violations counted: ${typeTotal ? ((r.count / typeTotal) * 100).toFixed(1) : '0.0'}%`, r.violation_type__code ? `Code: ${r.violation_type__code}` : null, r.violation_type__category ? `Category: ${r.violation_type__category}` : null, `Penalties: ${peso(r.total_penalty)}`, 'Click to filter the dashboard'].filter(Boolean)}
                 />
+                </ChartErrorBoundary>
                 {selectedType && (
                   <button type="button" className="link-chip" onClick={() => openTypeModal(selectedType)} style={{ marginTop: 8 }}>
                     <Info size={13} aria-hidden="true" /> Details: {selectedType.label}
@@ -817,13 +806,13 @@ export default function Analytics({ scrollTo }) {
           <Card>
             <CardHeader title="Peak Hours" subtitle="Violations by hour of day (Philippine time) — click a bar to filter" />
             {hasTimeData ? (
-              <PeakHoursChart data={peakHours} activeHour={filters.hour} onSelect={(r) => r && toggleFilter('hour', r.hour, r.label)} />
+              <ChartErrorBoundary><PeakHoursChart data={peakHours} activeHour={filters.hour} onSelect={(r) => r && toggleFilter('hour', r.hour, r.label)} /></ChartErrorBoundary>
             ) : <EmptyChart icon={Clock} message="No time-of-day data for this selection" />}
           </Card>
           <Card>
             <CardHeader title="Violations by Day of Week" subtitle="Monday to Sunday — click a bar to filter" />
             {hasTimeData ? (
-              <WeekdayChart data={byWeekday} activeWeekday={filters.weekday} onSelect={(r) => r && toggleFilter('weekday', r.weekday, r.name)} />
+              <ChartErrorBoundary><WeekdayChart data={byWeekday} activeWeekday={filters.weekday} onSelect={(r) => r && toggleFilter('weekday', r.weekday, r.name)} /></ChartErrorBoundary>
             ) : <EmptyChart icon={Calendar} message="No day-of-week data for this selection" />}
           </Card>
         </div>
@@ -831,7 +820,7 @@ export default function Analytics({ scrollTo }) {
           <Card>
             <CardHeader title="Busiest Day and Hour" subtitle="Which specific day-and-hour slots are busiest — click a bar to filter that day and hour" />
             {hasTimeData ? (
-              <BusiestSlotsChart heatmap={heatmap} activeWeekday={filters.weekday} activeHour={filters.hour} onSelect={toggleTimeCell} />
+              <ChartErrorBoundary><BusiestSlotsChart heatmap={heatmap} activeWeekday={filters.weekday} activeHour={filters.hour} onSelect={toggleTimeCell} /></ChartErrorBoundary>
             ) : <EmptyChart icon={Clock} message="No time data for this selection" />}
             <ChartNote>Peak Hours shows the hour of day across the whole week. Violations by Day of Week shows the day across all hours. This chart shows the combination: the slots where both line up.</ChartNote>
           </Card>
@@ -843,12 +832,14 @@ export default function Analytics({ scrollTo }) {
             <CardHeader title="Violations by Vehicle Type" subtitle="Click a bar to filter by vehicle type" />
             {vehicleRows.length > 0 ? (
               <>
+                <ChartErrorBoundary>
                 <RankedBarChart
                   data={vehicleRows} nameWidth={130}
                   isActive={(r) => r.name === filters.vehicle_type}
                   onSelect={(r) => r && toggleFilter('vehicle_type', r.name, r.name)}
                   extra={(r) => [`${r.share}% of all violations`]}
                 />
+                </ChartErrorBoundary>
                 {(vehicleBreakdown.other_count > 0 || vehicleBreakdown.unspecified_count > 0) && (
                   <ChartNote>
                     Not shown: {vehicleBreakdown.unspecified_count.toLocaleString()} with no vehicle type
@@ -859,15 +850,20 @@ export default function Analytics({ scrollTo }) {
             ) : <EmptyChart icon={Truck} message="No vehicle type data for this selection" />}
           </Card>
           <Card>
-            <CardHeader title="Vehicle Type × Violation Type" subtitle="Violation counts per vehicle type — click a cell to filter both, or a header to filter one" />
+            <CardHeader title="Vehicle Type × Violation Type" subtitle="Top vehicle types, split by violation type — click a segment to filter both" />
             {data.vehicle_by_type?.rows?.length > 0 ? (
-              <CrosstabMatrix
-                crosstab={data.vehicle_by_type} rowHeader="Vehicle type"
-                isRowActive={(label) => label === filters.vehicle_type} activeType={filters.violation_type}
-                onSelectCell={(type, row) => toggleCell('vehicle_type', row.label, type)}
-                onSelectRow={(label) => toggleFilter('vehicle_type', label, label)}
-                onSelectType={(type) => toggleFilter('violation_type', type.code, type.name)}
-              />
+              <>
+                <ChartErrorBoundary>
+                <StackedMixChart
+                  crosstab={data.vehicle_by_type} colors={mixColors}
+                  isRowActive={(label) => label === filters.vehicle_type} activeType={filters.violation_type}
+                  onSelectSegment={(type, row) => toggleCell('vehicle_type', row.label, type)}
+                  onSelectRow={(label) => toggleFilter('vehicle_type', label, label)}
+                  onSelectType={(type) => toggleFilter('violation_type', type.code, type.name)}
+                />
+                </ChartErrorBoundary>
+                <ChartNote>Top 8 vehicle types. Each bar is the five most common violation types in this period; everything else is Others. The label shows the full name. Click a colour in the legend to filter that violation, or a name on the left to filter that vehicle.</ChartNote>
+              </>
             ) : <EmptyChart icon={Truck} message="No vehicle and violation data for this selection" />}
           </Card>
         </div>
@@ -878,12 +874,14 @@ export default function Analytics({ scrollTo }) {
             <CardHeader title="Top Locations" subtitle="Click a bar to filter by location" />
             {locationRows.length > 0 ? (
               <>
+                <ChartErrorBoundary>
                 <RankedBarChart
                   data={locationRows} nameWidth={170}
                   isActive={(r) => r.name === filters.location}
                   onSelect={(r) => r && toggleFilter('location', r.name, r.name)}
                   extra={(r) => [`${r.share}% of all violations`, `Fines: ${peso(r.total_penalty)}`]}
                 />
+                </ChartErrorBoundary>
                 <ChartNote>
                   Top {locationRows.length} of {locationRanking.distinct_locations.toLocaleString()} locations.
                   {locationRanking.excluded_invalid_count > 0 ? ` ${locationRanking.excluded_invalid_count.toLocaleString()} records with a blank or invalid location are excluded.` : ''}
@@ -900,15 +898,20 @@ export default function Analytics({ scrollTo }) {
 
         <div style={{ display: 'grid', gridTemplateColumns: cols('minmax(0, 1.4fr) minmax(0, 1fr)', stackWide), gap: 16, marginBottom: 16 }}>
           <Card>
-            <CardHeader title="Location × Violation Type" subtitle="Violation counts per location — click a cell to filter both, or a header to filter one" />
+            <CardHeader title="Location × Violation Type" subtitle="Top locations, split by violation type — click a segment to filter both" />
             {data.hotspot_by_type?.rows?.length > 0 ? (
-              <CrosstabMatrix
-                crosstab={data.hotspot_by_type} rowHeader="Location"
-                isRowActive={(label) => label === filters.location} activeType={filters.violation_type}
-                onSelectCell={(type, row) => toggleCell('location', row.label, type)}
-                onSelectRow={(label) => toggleFilter('location', label, label)}
-                onSelectType={(type) => toggleFilter('violation_type', type.code, type.name)}
-              />
+              <>
+                <ChartErrorBoundary>
+                <StackedMixChart
+                  crosstab={data.hotspot_by_type} colors={mixColors}
+                  isRowActive={(label) => label === filters.location} activeType={filters.violation_type}
+                  onSelectSegment={(type, row) => toggleCell('location', row.label, type)}
+                  onSelectRow={(label) => toggleFilter('location', label, label)}
+                  onSelectType={(type) => toggleFilter('violation_type', type.code, type.name)}
+                />
+                </ChartErrorBoundary>
+                <ChartNote>Top 8 locations. Colours match Vehicle Type × Violation Type. Click a segment to filter that location and violation together.</ChartNote>
+              </>
             ) : <EmptyChart icon={MapPin} message="No location and violation data for this selection" />}
           </Card>
 
@@ -943,7 +946,7 @@ export default function Analytics({ scrollTo }) {
                   <div><div className="text-display" style={{ fontSize: 28 }}>{repeatStats.rate}%</div><div className="text-caption">repeat rate</div></div>
                   <div><div className="text-display" style={{ fontSize: 28 }}>{repeatStats.repeat_violators.toLocaleString()}</div><div className="text-caption">of {repeatStats.unique_violators.toLocaleString()} violators</div></div>
                 </div>
-                <RepeatDistributionChart distribution={repeatStats.distribution} />
+                <ChartErrorBoundary><RepeatDistributionChart distribution={repeatStats.distribution} /></ChartErrorBoundary>
               </div>
             )}
             {repeatOffenders.length > 0 ? (
@@ -973,9 +976,10 @@ export default function Analytics({ scrollTo }) {
         <div style={{ display: 'grid', gridTemplateColumns: cols(PAIR), gap: 16, marginBottom: 16 }}>
           <div id="an-collection">
             <Card style={{ height: '100%' }}>
-              <CardHeader title="Collection Overview" subtitle="Penalties issued in this period vs. collected — click any row" />
+              <CardHeader title="Collection Overview" subtitle="Share of assessed penalties that were collected in this period" />
               <div style={{ display: 'grid', gridTemplateColumns: cols('160px minmax(0, 1fr)', stackTiny || (!stackPair && rootWidth < 1000)), gap: 20, alignItems: 'center', marginBottom: 14 }}>
                 <div style={{ position: 'relative', width: 160, height: 160 }}>
+                  <ChartErrorBoundary>
                   <ResponsiveContainer width="100%" height="100%">
                     <RePieChart>
                       <Pie
@@ -990,6 +994,7 @@ export default function Analytics({ scrollTo }) {
                       </Pie>
                     </RePieChart>
                   </ResponsiveContainer>
+                  </ChartErrorBoundary>
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                     <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--slate-950)' }}>{collectionOverview?.collection_rate ?? 0}%</span>
                     <span className="text-caption">Collection Rate</span>
@@ -1001,20 +1006,7 @@ export default function Analytics({ scrollTo }) {
                   <div style={{ fontSize: 13, color: 'var(--slate-700)' }}>Not yet collected (this period): <strong>{peso(collectionOverview?.outstanding)}</strong></div>
                 </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {[
-                  { label: 'Paid Violations', value: summary.paid, color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', isCount: true },
-                  { label: 'Pending Count', value: summary.pending, color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A', isCount: true },
-                  { label: 'Processing Count', value: collectionOverview?.processing ?? 0, color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE', isCount: true },
-                ].map((row, i) => (
-                  <Clickable key={i} onClick={() => openCollectionModal(row)}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: 'var(--radius-md)', background: row.bg, border: `1px solid ${row.border}` }}>
-                      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--slate-700)' }}>{row.label}</span>
-                      <span style={{ fontSize: 16, fontWeight: 600, color: row.color }}>{row.value.toLocaleString()}</span>
-                    </div>
-                  </Clickable>
-                ))}
-              </div>
+              <ChartNote>Paid, pending, and processing counts are in Violations by Status. This chart is the money: assessed versus collected for the same period.</ChartNote>
             </Card>
           </div>
         </div>
@@ -1052,6 +1044,7 @@ export default function Analytics({ scrollTo }) {
                   <button onClick={() => setShowYearFilter(true)} className="btn btn-primary btn-sm">Open Year Filter</button>
                 </div>
               ) : rawYearComparison.length > 0 ? (
+                <ChartErrorBoundary>
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={rawYearComparison} margin={{ top: 4, right: 16, bottom: 0, left: 0 }} onClick={(state) => { const row = rowFromChartEvent(rawYearComparison, state); if (row) openYearModal(row) }} style={{ cursor: 'pointer' }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
@@ -1062,6 +1055,7 @@ export default function Analytics({ scrollTo }) {
                     {activeYears.map((yr, i) => <Bar key={yr} dataKey={String(yr)} fill={YEAR_COLORS[i] || '#6B7280'} radius={[4, 4, 0, 0]} maxBarSize={22} />)}
                   </BarChart>
                 </ResponsiveContainer>
+                </ChartErrorBoundary>
               ) : <EmptyChart icon={BarChart2} message="No comparison data available for the selected years" />}
             </Card>
 
@@ -1079,6 +1073,7 @@ export default function Analytics({ scrollTo }) {
                       <RefreshCw size={16} className="spin" /> Loading comparison data...
                     </div>
                   ) : rows.length > 0 ? (
+                    <ChartErrorBoundary>
                     <ResponsiveContainer width="100%" height={Math.max(220, rows.length * 40)}>
                       <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" horizontal={false} />
@@ -1089,6 +1084,7 @@ export default function Analytics({ scrollTo }) {
                         {activeYears.map((yr, i) => <Bar key={yr} dataKey={String(yr)} fill={YEAR_COLORS[i] || '#6B7280'} radius={[0, 4, 4, 0]} maxBarSize={18} />)}
                       </BarChart>
                     </ResponsiveContainer>
+                    </ChartErrorBoundary>
                   ) : <EmptyChart icon={BarChart2} message={`No ${opt?.label?.toLowerCase() || 'category'} data for the selected years`} />}
                 </Card>
               )
@@ -1105,7 +1101,7 @@ export default function Analytics({ scrollTo }) {
                   <div><div className="text-display" style={{ fontSize: 28 }}>{aging.total_count.toLocaleString()}</div><div className="text-caption">unpaid violations</div></div>
                   <div><div className="text-display" style={{ fontSize: 28 }}>{peso(aging.total_amount)}</div><div className="text-caption">outstanding</div></div>
                 </div>
-                <AgingChart buckets={aging.buckets} />
+                <ChartErrorBoundary><AgingChart buckets={aging.buckets} /></ChartErrorBoundary>
               </>
             ) : <EmptyChart icon={Hourglass} message="No unpaid violations are outstanding" />}
             {aging && <ChartNote>Counts active pending and processing tickets as of {aging.as_of}. It ignores the period filter. These are tickets that are not paid yet.</ChartNote>}
@@ -1118,7 +1114,7 @@ export default function Analytics({ scrollTo }) {
                   <div><div className="text-display" style={{ fontSize: 28 }}>{data.payment_duration.average_days}</div><div className="text-caption">average days to payment</div></div>
                   <div><div className="text-display" style={{ fontSize: 28 }}>{data.payment_duration.paid_count.toLocaleString()}</div><div className="text-caption">paid with both dates</div></div>
                 </div>
-                <PaymentDurationChart buckets={data.payment_duration.buckets} />
+                <ChartErrorBoundary><PaymentDurationChart buckets={data.payment_duration.buckets} /></ChartErrorBoundary>
               </>
             ) : <EmptyChart icon={DollarSign} message="No paid violations with both an issue date and a payment date in this selection" />}
             <ChartNote>Only violations that are paid and have both an issue timestamp and a payment date. The period filter applies. Unpaid tickets are in Outstanding Tickets by Age.</ChartNote>
